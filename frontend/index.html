@@ -132,6 +132,7 @@
     .spray-note { margin: 8px 2px; padding: 10px 14px; background: #fff8e1; border: 2px solid var(--amber); border-radius: 12px; font-size: 16px; color: #8a5a00; }
 
     .cand { background: #fff; border: 2px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+    .cand.active { border-color: var(--green); background: #e8f5e9; }
     .cand-name { font-size: var(--fs-xl); font-weight: 700; margin-bottom: 8px; }
     .badge { font-size: 14px; padding: 2px 10px; border-radius: 8px; color: #fff; vertical-align: 4px; margin-left: 8px; }
     .badge.dis { background: #c0392b; }
@@ -510,6 +511,35 @@
       </div>
     </div>
 
+    <!-- 全年农事日历浮层 -->
+    <div class="overlay" v-if="calAll" @click.self="closeCalendarAll">
+      <div class="sheet" style="height:90vh">
+        <div class="sheet-hd">
+          <span>📅 {{ calAll.cropName }} 全年农事</span>
+          <span class="close" @click="closeCalendarAll">✕</span>
+        </div>
+        <div class="sheet-bd">
+          <div v-for="(s, i) in calAll.stages" :key="s.key" class="cand" :class="{active: s.key === calAll.currentKey}">
+            <div class="cand-name" @click="calAll.open = (calAll.open === i ? -1 : i)" style="cursor:pointer">
+              {{ s.name }}
+              <span class="plot-tag" v-if="s.key === calAll.currentKey" style="background:var(--amber)">当前</span>
+              <span style="font-size:14px;color:var(--ink-2);font-weight:400"> {{ s.window }}</span>
+              <span style="float:right;font-size:18px">{{ calAll.open === i ? '▲' : '▼' }}</span>
+            </div>
+            <div class="cand-row" style="color:var(--ink-2)">{{ s.summary }}</div>
+            <template v-if="calAll.open === i">
+              <div class="task" v-for="(t, j) in s.tasks" :key="j" style="border:none;padding:10px 0">
+                <div class="t"><span class="tag">{{ t.category }}</span>{{ t.title }}</div>
+                <div class="d">{{ t.detail }}</div>
+                <button class="log-it" @click="quickLog(t.category, t.title)">✓ 做了，记一笔</button>
+              </div>
+              <div v-if="!s.tasks.length" class="hint">（暂无条目）</div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 病虫害图鉴浮层 -->
     <div class="overlay" v-if="library" @click.self="closeLibrary">
       <div class="sheet" style="height:90vh">
@@ -603,7 +633,7 @@
     <!-- 底部导航 -->
     <div class="tabbar">
       <div class="tab active"><span class="ic">🏠</span>首页</div>
-      <div class="tab" @click="toast('农事日历：开发中')"><span class="ic">📅</span>农事</div>
+      <div class="tab" @click="openCalendarAll"><span class="ic">📅</span>农事</div>
       <div class="tab" @click="openPlots"><span class="ic">🌳</span>我的园子</div>
       <div class="tab" @click="openMe"><span class="ic">👤</span>我</div>
     </div>
@@ -626,6 +656,7 @@
           logCategories: ['施肥','打药','修剪','疏花疏果','套袋','灌溉','采收','巡园','其他'],
           plotSummary: null,
           library: null,
+          calAll: null,
           meView: false,
           contacts: [],
           contactForm: null,
@@ -838,6 +869,20 @@
           const ok = await this._postLog('巡园', '诊断：' + c.name, c.cultural_control || '');
           if (ok) this.toast('已记到园子');
         },
+        // ---- 全年农事日历 ----
+        async openCalendarAll() {
+          this.calAll = { cropName: this.cropName(this.crop), stages: [], currentKey: this.stage ? this.stage.key : '', open: -1 };
+          try {
+            const r = await fetch('/api/calendar/all' + this.cropQS('?'));
+            const d = await r.json();
+            this.calAll.stages = d.stages || [];
+            this.calAll.cropName = d.crop_name || this.calAll.cropName;
+            // 默认展开当前阶段
+            const idx = this.calAll.stages.findIndex(s => s.key === this.calAll.currentKey);
+            this.calAll.open = idx;
+          } catch (e) { this.toast('农事日历加载失败'); }
+        },
+        closeCalendarAll() { this.calAll = null; },
         // ---- 病虫害图鉴（E3） ----
         async openLibrary() {
           this.library = { cropName: this.cropName(this.crop), items: [], open: -1 };
