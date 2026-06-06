@@ -79,6 +79,13 @@ Phase 3c（语音问答）✅
 > ⚠️ 手机上**语音输入(ASR)和"添加到主屏幕"需要 HTTPS**，纯局域网 http 不行。
 > 用带 https 的内网穿透（cpolar 等）一并解决可达性与安全环境。
 
+Phase 8（回归测试 pytest）✅
+- `tests/` 27 个用例，覆盖纯逻辑层与仓储层（分层让各层可独立单测）：
+  物候期（跨年休眠/多作物差异）、作物注册表（解析/回退）、知识库检索+**用药护栏**、
+  灾害规则（霜冻按物候分级/冰雹/措施）、地块/日志/去重仓储（含级联删除）、诊断 mock
+- 仓储测试用 tmp_path 独立 SQLite，不碰真实数据；异步用例用 asyncio.run（免 pytest-asyncio）
+- 运行：`python -m pytest`（见 pytest.ini）
+
 Phase 7（主动推送 F1 · 老人产品命脉）✅
 - **推送通道抽象** `services/notify/`（base/factory/log/serverchan），模式同 AI provider
   - `log` 通道默认、免配置（写日志）；`serverchan`（方糖）推到父母微信
