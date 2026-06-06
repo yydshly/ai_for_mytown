@@ -79,6 +79,17 @@ Phase 3c（语音问答）✅
 > ⚠️ 手机上**语音输入(ASR)和"添加到主屏幕"需要 HTTPS**，纯局域网 http 不行。
 > 用带 https 的内网穿透（cpolar 等）一并解决可达性与安全环境。
 
+Phase 7（主动推送 F1 · 老人产品命脉）✅
+- **推送通道抽象** `services/notify/`（base/factory/log/serverchan），模式同 AI provider
+  - `log` 通道默认、免配置（写日志）；`serverchan`（方糖）推到父母微信
+- 去重表 `notifications_sent`（同地块/同灾害/同天只推一次，防刷屏）
+- `alert_scheduler.py`：`run_alert_check` 遍历地块→按作物/位置评估→推新预警；
+  `AlertScheduler` 用 APScheduler 定时（默认 6/12/18 时），随应用启停、缺库优雅降级
+- `routes/notify_routes.py`：`GET /api/notify/status`、`POST /api/notify/check-now?scenario=&force=`
+- 验证：check-now 推送 severe 预警 + 二次去重；推送文案即父母微信所见
+- 启用真实微信推送：① `pip install apscheduler` ② 父母关注「方糖」服务号取 SendKey
+  ③ config.notify.channel 改 serverchan 并填 sendkey
+
 Phase 6（农事日志 D2）✅
 - `domain/activity_log.py` + `repositories/activity_log_repository.py`（复用 repository 分层）
 - `activity_logs` 表（外键→plots，**级联删除**）；`routes/log_routes.py`

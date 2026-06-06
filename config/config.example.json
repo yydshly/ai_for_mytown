@@ -17,6 +17,13 @@
     "keep_uploaded_images_days": 0,
     "_comment": "0 表示不留存，处理完即删；>0 表示保留天数"
   },
+
+  "notify": {
+    "_comment": "主动推送（F1）。channel=log 仅写日志（默认、无需配置）；channel=serverchan 推到微信（父母关注方糖服务号后填 sendkey）。schedule_hours 为每日定时巡检时间。",
+    "channel": "log",
+    "serverchan": { "sendkey": "${SERVERCHAN_KEY}" },
+    "schedule_hours": [6, 12, 18]
+  },
   "ai": {
     "_note": "active 用原生 minimax(MiniMax-Text-01，快、即出正文)。vision 已验证模型名为 abab7-chat-preview(旧名 MiniMax-VL-01 已失效)。minimax_anthropic(M2.7)是思考模型，max_tokens 小会出空响应，仅在需要复杂推理时用。",
     "active": "minimax",

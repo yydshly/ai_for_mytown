@@ -27,11 +27,13 @@ from src.backend.routes import (  # noqa: E402
     crop_routes,
     diagnose_routes,
     log_routes,
+    notify_routes,
     plot_routes,
     runtime_routes,
     static_routes,
     tts_routes,
 )
+from src.backend.services.alert_scheduler import AlertScheduler  # noqa: E402
 
 log = logging.getLogger("server")
 
@@ -59,7 +61,20 @@ def create_app() -> tuple[FastAPI, "object"]:
     chat_routes.register(app, ctx)
     ai_routes.register(app, ctx)
     tts_routes.register(app, ctx)
+    notify_routes.register(app, ctx)
     static_routes.register(app, ctx)
+
+    # 预警定时推送：随应用启停（F1）
+    scheduler = AlertScheduler(ctx)
+
+    @app.on_event("startup")
+    def _start_scheduler():
+        scheduler.start()
+
+    @app.on_event("shutdown")
+    def _stop_scheduler():
+        scheduler.stop()
+
     return app, ctx
 
 

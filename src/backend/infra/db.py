@@ -43,6 +43,16 @@ _MIGRATIONS: list[str] = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_logs_plot ON activity_logs(plot_id, date)",
+    """
+    CREATE TABLE IF NOT EXISTS notifications_sent (
+        id         TEXT PRIMARY KEY,
+        plot_id    TEXT NOT NULL,
+        alert_kind TEXT NOT NULL,
+        date       TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(plot_id, alert_kind, date)
+    )
+    """,
 ]
 
 
