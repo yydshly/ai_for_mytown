@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#2e7d32" />
+  <title>AI 助农 · 桃树</title>
+  <!-- PWA：可"添加到主屏幕"，像 App 一样打开 -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="助农桃树" />
+  <!-- Vue3 全局构建（CDN）。仅用于数据绑定；适老化样式全部手写以便精确控制字号/按钮尺寸。
+       生产版按 ADR-005 迁移到 Vite + Vant + PWA。 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    /* ===== 适老化设计令牌（硬约束，见 docs/adr.md ADR-005）===== */
+    :root {
+      --fs-base: 19px;      /* 正文字号下限 */
+      --fs-lg:   22px;
+      --fs-xl:   28px;
+      --tap-min: 96px;      /* 可点区域最小高度 */
+      --green:   #2e7d32;
+      --green-d: #1b5e20;
+      --amber:   #ef6c00;
+      --red:     #c62828;
+      --ink:     #1f2421;   /* 高对比正文色 */
+      --ink-2:   #4a544d;
+      --bg:      #f3f6f2;
+      --card:    #ffffff;
+      --line:    #e2e8e0;
+      --radius:  16px;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; padding: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-size: var(--fs-base);
+      font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.55;
+      -webkit-text-size-adjust: 100%;
+    }
+    #app { max-width: 540px; margin: 0 auto; min-height: 100vh; padding-bottom: 92px; }
+
+    /* 顶部物候条 */
+    .topbar {
+      background: linear-gradient(135deg, var(--green), var(--green-d));
+      color: #fff; padding: 16px 18px 18px;
+    }
+    .topbar .date { font-size: var(--fs-base); opacity: .92; }
+    .topbar .stage { font-size: var(--fs-xl); font-weight: 700; margin-top: 4px; }
+    .topbar .stage .win { font-size: 16px; font-weight: 400; opacity: .85; margin-left: 8px; }
+    .topbar .summary { font-size: 16px; opacity: .9; margin-top: 6px; }
+
+    /* 预警横幅 */
+    .alert {
+      display: flex; align-items: center; gap: 12px;
+      margin: 14px; padding: 16px 18px;
+      background: #fff3e0; border: 2px solid var(--amber);
+      border-radius: var(--radius); color: var(--amber);
+    }
+    .alert.severe { background: #fdecea; border-color: var(--red); color: var(--red); }
+    .alert .ic { font-size: 30px; }
+    .alert .txt { font-size: var(--fs-lg); font-weight: 700; flex: 1; }
+    .alert .go { font-size: 16px; white-space: nowrap; }
+
+    /* 三大快捷入口 */
+    .actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 4px 14px 14px; }
+    .action {
+      min-height: var(--tap-min);
+      background: var(--card); border: 2px solid var(--line); border-radius: var(--radius);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+      font-size: var(--fs-lg); font-weight: 700; color: var(--ink);
+      cursor: pointer; transition: transform .05s;
+    }
+    .action:active { transform: scale(.96); }
+    .action .ic { font-size: 34px; }
+    .action.primary { background: var(--green); color: #fff; border-color: var(--green); }
+
+    /* 卡片 */
+    .card { background: var(--card); margin: 14px; border-radius: var(--radius); border: 2px solid var(--line); overflow: hidden; }
+    .card .hd { padding: 16px 18px; font-size: var(--fs-lg); font-weight: 700; border-bottom: 2px solid var(--line); display: flex; align-items: center; gap: 8px; }
+    .card .bd { padding: 6px 0; }
+    .task { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+    .task:last-child { border-bottom: none; }
+    .task .t { font-size: var(--fs-lg); font-weight: 700; }
+    .task .tag { display: inline-block; font-size: 14px; color: #fff; background: var(--green); border-radius: 8px; padding: 2px 10px; margin-right: 8px; vertical-align: 2px; }
+    .task .d { font-size: var(--fs-base); color: var(--ink-2); margin-top: 6px; }
+
+    .hint { text-align: center; color: var(--ink-2); font-size: 16px; padding: 18px; }
+    .wirenote { margin: 14px; padding: 12px 16px; background: #eef4ff; border: 1px dashed #5a7fd6; border-radius: 12px; color: #2a4a99; font-size: 15px; }
+
+    /* 底部导航 */
+    .tabbar {
+      position: fixed; left: 0; right: 0; bottom: 0; max-width: 540px; margin: 0 auto;
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      background: #fff; border-top: 2px solid var(--line);
+    }
+    .tab { padding: 10px 0 12px; text-align: center; font-size: 15px; color: var(--ink-2); cursor: pointer; }
+    .tab .ic { font-size: 26px; display: block; line-height: 1.1; }
+    .tab.active { color: var(--green); font-weight: 700; }
+
+    /* toast */
+    .toast { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); background: rgba(0,0,0,.82); color: #fff; padding: 14px 22px; border-radius: 12px; font-size: var(--fs-base); z-index: 50; }
+
+    /* ===== 拍照诊断浮层 ===== */
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40; display: flex; align-items: flex-end; justify-content: center; }
+    .sheet { width: 100%; max-width: 540px; max-height: 90vh; background: var(--bg); border-radius: 20px 20px 0 0; display: flex; flex-direction: column; }
+    .sheet-hd { padding: 16px 18px; font-size: var(--fs-lg); font-weight: 700; display: flex; justify-content: space-between; align-items: center; background: var(--green); color: #fff; border-radius: 20px 20px 0 0; }
+    .sheet-hd .close { font-size: 24px; padding: 0 6px; cursor: pointer; }
+    .sheet-bd { padding: 14px; overflow-y: auto; flex: 1; }
+    .sheet-ft { padding: 12px 16px; font-size: 14px; color: var(--ink-2); background: #fff; border-top: 1px solid var(--line); }
+
+    .diag-center { text-align: center; padding: 40px 0; font-size: var(--fs-lg); color: var(--ink-2); }
+    .spinner { width: 44px; height: 44px; margin: 0 auto 16px; border: 5px solid var(--line); border-top-color: var(--green); border-radius: 50%; animation: spin 0.9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .diag-raw { background: #fff; border: 2px solid var(--green); border-radius: 12px; padding: 14px; font-size: var(--fs-lg); white-space: pre-line; }
+    .diag-note { margin: 12px 2px; font-size: 16px; color: var(--amber); }
+
+    .cand { background: #fff; border: 2px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+    .cand-name { font-size: var(--fs-xl); font-weight: 700; margin-bottom: 8px; }
+    .badge { font-size: 14px; padding: 2px 10px; border-radius: 8px; color: #fff; vertical-align: 4px; margin-left: 8px; }
+    .badge.dis { background: #c0392b; }
+    .badge.pest { background: #b9770e; }
+    .cand-row { font-size: 16px; margin: 6px 0; line-height: 1.5; }
+    .cand-row b { color: var(--ink); }
+    .cand-src { font-size: 13px; color: var(--ink-2); margin-top: 8px; }
+
+    .pest-box { margin: 10px 0 4px; border-radius: 12px; padding: 12px 14px; }
+    .pest-box.verified { background: #e8f5e9; border: 2px solid var(--green); }
+    .pest-box.pending  { background: #fff3e0; border: 2px solid var(--amber); }
+    .pest-box.none     { background: #f0f0f0; border: 2px solid var(--line); }
+    .pest-hd { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+    .pest-item { font-size: 16px; margin: 4px 0; }
+    .pest-note { font-size: 15px; color: var(--ink-2); line-height: 1.5; }
+
+    .diag-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 8px 2px 4px; }
+    .chip { background: #fff; border: 2px solid var(--green); color: var(--green); border-radius: 22px; padding: 10px 18px; font-size: 16px; font-weight: 700; cursor: pointer; }
+
+    /* "听"按钮（适老化：大、显眼） */
+    .speak { display: inline-flex; align-items: center; gap: 4px; background: var(--green); color: #fff; border: none; border-radius: 20px; padding: 6px 14px; font-size: 16px; font-weight: 700; cursor: pointer; vertical-align: middle; }
+    .speak:active { transform: scale(.95); }
+    .speak.busy { background: var(--amber); }
+    .speak.lg { padding: 12px 22px; font-size: var(--fs-lg); width: 100%; justify-content: center; margin: 6px 0 2px; }
+    .topbar .speak { background: rgba(255,255,255,.25); }
+
+    /* ===== 语音问答 ===== */
+    .chat-bd { padding: 14px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+    .bubble { max-width: 85%; padding: 12px 16px; border-radius: 16px; font-size: var(--fs-lg); line-height: 1.55; white-space: pre-line; }
+    .bubble.me { align-self: flex-end; background: var(--green); color: #fff; border-bottom-right-radius: 4px; }
+    .bubble.ai { align-self: flex-start; background: #fff; border: 2px solid var(--line); border-bottom-left-radius: 4px; }
+    .bubble.ai .speak { margin-top: 8px; }
+    .chat-empty { text-align: center; color: var(--ink-2); font-size: 16px; padding: 30px 10px; }
+    .mic-area { padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); background: #fff; border-top: 2px solid var(--line); }
+    .mic-btn { width: 100%; min-height: 64px; border: none; border-radius: 16px; background: var(--green); color: #fff; font-size: var(--fs-xl); font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; }
+    .mic-btn.rec { background: var(--red); animation: pulse 1s infinite; }
+    @keyframes pulse { 50% { opacity: .65; } }
+    .mic-hint { text-align: center; font-size: 15px; color: var(--ink-2); margin-top: 8px; }
+    .chat-text-row { display: flex; gap: 8px; margin-top: 10px; }
+    .chat-text-row input { flex: 1; font-size: 17px; padding: 12px 14px; border: 2px solid var(--line); border-radius: 12px; }
+    .chat-text-row button { background: var(--green); color: #fff; border: none; border-radius: 12px; padding: 0 18px; font-size: 17px; font-weight: 700; }
+    .typing { align-self: flex-start; color: var(--ink-2); font-size: 16px; padding: 6px 4px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- 顶部物候条 -->
+    <div class="topbar">
+      <div class="date">{{ dateText }} · {{ region }}</div>
+      <div class="stage" v-if="stage">
+        {{ stage.name }}<span class="win">{{ stage.window }}</span>
+      </div>
+      <div class="stage" v-else>加载中…</div>
+      <div class="summary" v-if="stage">
+        {{ stage.summary }}
+        <button v-if="ttsAvailable" class="speak" :class="{busy: speaking===stage.summary}"
+                @click="speak(stage.summary)">🔊 听</button>
+      </div>
+    </div>
+
+    <!-- 预警横幅（真实天气 + 硬规则）-->
+    <div class="alert" v-if="topAlert" :class="{severe: topAlert.severity==='severe'}"
+         @click="openAlert(topAlert)">
+      <div class="ic">{{ topAlert.icon }}</div>
+      <div class="txt">{{ topAlert.name }}预警：{{ topAlert.reason }}</div>
+      <div class="go">怎么办 ›</div>
+    </div>
+
+    <!-- 三大快捷入口 -->
+    <div class="actions">
+      <div class="action primary" @click="pickPhoto">
+        <div class="ic">📷</div><div>拍照诊断</div>
+      </div>
+      <div class="action" @click="openChat">
+        <div class="ic">🎤</div><div>问问 AI</div>
+      </div>
+      <div class="action" @click="scrollToCalendar">
+        <div class="ic">📋</div><div>今日农事</div>
+      </div>
+    </div>
+    <!-- 拍照/相册输入（相机优先）-->
+    <input ref="photo" type="file" accept="image/*" capture="environment"
+           style="display:none" @change="onPhoto" />
+
+    <!-- 本周该做什么（真实数据）-->
+    <div class="card" ref="calendar">
+      <div class="hd">📅 这阶段该做什么</div>
+      <div class="bd" v-if="tasks.length">
+        <div class="task" v-for="(t, i) in tasks" :key="i">
+          <div class="t">
+            <span class="tag">{{ t.category }}</span>{{ t.title }}
+            <button v-if="ttsAvailable" class="speak" :class="{busy: speaking===taskText(t)}"
+                    @click="speak(taskText(t))">🔊 听</button>
+          </div>
+          <div class="d">{{ t.detail }}</div>
+        </div>
+      </div>
+      <div class="hint" v-else-if="loadError">{{ loadError }}</div>
+      <div class="hint" v-else>加载中…</div>
+    </div>
+
+    <div class="wirenote">
+      预览版：物候期、农事、拍照诊断为真实功能；预警、语音问答为占位，将在 Phase 3 接入。
+    </div>
+
+    <!-- 拍照诊断结果浮层 -->
+    <div class="overlay" v-if="diag.open" @click.self="closeDiag">
+      <div class="sheet">
+        <div class="sheet-hd">
+          <span>🔍 拍照诊断</span>
+          <span class="close" @click="closeDiag">✕</span>
+        </div>
+        <div class="sheet-bd">
+          <!-- 加载中 -->
+          <div v-if="diag.loading" class="diag-center">
+            <div class="spinner"></div>
+            <div>正在识别，请稍候…</div>
+          </div>
+
+          <!-- 出错/未配置 -->
+          <template v-else-if="diag.result && !diag.result.candidates.length">
+            <div class="diag-note">{{ diag.result.confidence_note }}</div>
+            <div class="diag-actions">
+              <div v-for="a in diag.result.next_actions" :key="a" class="chip">{{ a }}</div>
+            </div>
+          </template>
+
+          <!-- 有结果 -->
+          <template v-else-if="diag.result">
+            <div class="diag-raw">{{ diag.result.identification_raw }}</div>
+            <button v-if="ttsAvailable" class="speak lg" :class="{busy: speaking===diagSpeakText()}"
+                    @click="speak(diagSpeakText())">🔊 听一遍诊断结果</button>
+            <div class="diag-note">{{ diag.result.confidence_note }}</div>
+
+            <div class="cand" v-for="(c, i) in diag.result.candidates" :key="i">
+              <div class="cand-name">
+                {{ c.name }}
+                <span class="badge" :class="c.type === 'pest' ? 'pest' : 'dis'">
+                  {{ c.type === 'pest' ? '虫害' : '病害' }}
+                </span>
+              </div>
+              <div class="cand-row"><b>症状：</b>{{ c.symptoms }}</div>
+              <div class="cand-row"><b>怎么认：</b>{{ c.identify_cues }}</div>
+              <div class="cand-row"><b>农业/物理防治：</b>{{ c.cultural_control }}</div>
+
+              <!-- 用药护栏 -->
+              <div class="pest-box" :class="c.pesticide.status">
+                <div class="pest-hd">💊 用药建议</div>
+                <template v-if="c.pesticide.status === 'verified'">
+                  <div v-for="(it, j) in c.pesticide.items" :key="j" class="pest-item">
+                    {{ it.agent }} ｜ {{ it.dosage }} ｜ {{ it.timing }}
+                    <span v-if="it.phi_days">（安全间隔期 {{ it.phi_days }} 天）</span>
+                  </div>
+                  <div class="pest-note">{{ c.pesticide.note }}</div>
+                </template>
+                <div v-else class="pest-note">{{ c.pesticide.note }}</div>
+              </div>
+
+              <div class="cand-src">来源：{{ c.source }}（{{ c.trust_level }}，{{ c.review_status === 'verified' ? '已审核' : '待审核' }}）</div>
+            </div>
+
+            <div class="diag-actions">
+              <div class="chip" @click="pickPhoto">📷 重拍</div>
+              <div class="chip" @click="toast('一键联系农技员：Phase 1 后续接入')">📞 咨询农技员</div>
+            </div>
+          </template>
+        </div>
+        <div class="sheet-ft">{{ diag.result ? diag.result.disclaimer : '' }}</div>
+      </div>
+    </div>
+
+    <!-- 灾害预警详情浮层 -->
+    <div class="overlay" v-if="alertView" @click.self="closeAlert">
+      <div class="sheet">
+        <div class="sheet-hd" :style="alertView.severity==='severe' ? 'background:#c62828' : ''">
+          <span>{{ alertView.icon }} {{ alertView.name }}预警</span>
+          <span class="close" @click="closeAlert">✕</span>
+        </div>
+        <div class="sheet-bd">
+          <div class="diag-raw">{{ alertView.reason }}。{{ alertView.threat }}</div>
+          <button v-if="ttsAvailable" class="speak lg" :class="{busy: speaking===alertSpeakText(alertView)}"
+                  @click="speak(alertSpeakText(alertView))">🔊 听怎么应对</button>
+
+          <div class="cand" v-if="alertView.measures.before.length">
+            <div class="cand-name" style="font-size:var(--fs-lg)">⏰ 来之前要做</div>
+            <div class="cand-row" v-for="(m,i) in alertView.measures.before" :key="'b'+i">· {{ m }}</div>
+          </div>
+          <div class="cand" v-if="alertView.measures.during.length">
+            <div class="cand-name" style="font-size:var(--fs-lg)">⚡ 发生时</div>
+            <div class="cand-row" v-for="(m,i) in alertView.measures.during" :key="'d'+i">· {{ m }}</div>
+          </div>
+          <div class="cand" v-if="alertView.measures.after.length">
+            <div class="cand-name" style="font-size:var(--fs-lg)">🔧 过后补救</div>
+            <div class="cand-row" v-for="(m,i) in alertView.measures.after" :key="'a'+i">· {{ m }}</div>
+          </div>
+
+          <div class="diag-actions">
+            <div class="chip" @click="toast('一键联系农技员：后续接入')">📞 咨询农技员</div>
+          </div>
+        </div>
+        <div class="sheet-ft">预警依据天气预报与当前物候期，仅供参考，请结合田间实际判断。</div>
+      </div>
+    </div>
+
+    <!-- 语音问答浮层 -->
+    <div class="overlay" v-if="chat.open" @click.self="closeChat">
+      <div class="sheet" style="height:88vh">
+        <div class="sheet-hd">
+          <span>🎤 问问 AI（桃树）</span>
+          <span class="close" @click="closeChat">✕</span>
+        </div>
+        <div class="chat-bd" ref="chatBd">
+          <div v-if="!chat.msgs.length" class="chat-empty">
+            按住下面绿色按钮说话，或打字提问。<br>比如："叶子卷了咋办"、"现在该施啥肥"。
+          </div>
+          <template v-for="(m, i) in chat.msgs" :key="i">
+            <div class="bubble" :class="m.role === 'user' ? 'me' : 'ai'">
+              {{ m.content }}
+              <div v-if="m.role === 'assistant' && ttsAvailable">
+                <button class="speak" :class="{busy: speaking===m.content}" @click="speak(m.content)">🔊 听</button>
+              </div>
+            </div>
+          </template>
+          <div v-if="chat.thinking" class="typing">AI 正在想…</div>
+        </div>
+        <div class="mic-area">
+          <button class="mic-btn" :class="{rec: chat.recording}"
+                  @click="toggleMic" :disabled="chat.thinking">
+            <span>🎤</span><span>{{ chat.recording ? '正在听…（点一下停止）' : '按一下说话' }}</span>
+          </button>
+          <div class="mic-hint" v-if="chat.asrUnsupported">这个浏览器不支持语音，请用下面打字提问</div>
+          <div class="chat-text-row">
+            <input v-model="chat.input" placeholder="也可以打字提问…"
+                   @keyup.enter="sendChat(chat.input)" />
+            <button @click="sendChat(chat.input)" :disabled="chat.thinking">发送</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部导航 -->
+    <div class="tabbar">
+      <div class="tab active"><span class="ic">🏠</span>首页</div>
+      <div class="tab" @click="toast('农事日历：开发中')"><span class="ic">📅</span>农事</div>
+      <div class="tab" @click="toast('我的园子：开发中')"><span class="ic">🌳</span>我的园子</div>
+      <div class="tab" @click="toast('个人中心：开发中')"><span class="ic">👤</span>我</div>
+    </div>
+
+    <div class="toast" v-if="toastMsg">{{ toastMsg }}</div>
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+    createApp({
+      data() {
+        return {
+          region: '陕西关中',
+          dateText: '',
+          stage: null,
+          tasks: [],
+          loadError: '',
+          alerts: [],
+          alertView: null,   // 当前查看的预警详情
+          toastMsg: '',
+          _toastTimer: null,
+          diag: { open: false, loading: false, result: null },
+          // true 走后端 mock（无 key 联调）；已配置 MiniMax vision，置 false 走真实识别。
+          useMock: false,
+          ttsAvailable: false,
+          speaking: '',
+          _audio: null,
+          chat: {
+            open: false, msgs: [], input: '', thinking: false,
+            recording: false, asrUnsupported: false,
+          },
+          _recognition: null,
+        };
+      },
+      mounted() {
+        this.dateText = this.fmtDate(new Date());
+        this.loadToday();
+        this.checkTts();
+        this.loadAlerts();
+      },
+      computed: {
+        topAlert() { return this.alerts.length ? this.alerts[0] : null; },
+      },
+      methods: {
+        fmtDate(d) {
+          return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+        },
+        async loadToday() {
+          try {
+            const r = await fetch('/api/calendar/today');
+            if (!r.ok) throw new Error('bad status ' + r.status);
+            const data = await r.json();
+            this.region = data.region || this.region;
+            this.stage = data.stage || null;
+            this.tasks = data.tasks || [];
+          } catch (e) {
+            // 友好降级（R-07）：不让老人看到技术报错
+            this.loadError = '网络不太好，稍后再试试';
+          }
+        },
+        scrollToCalendar() {
+          const el = this.$refs.calendar;
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+        // ---- 灾害预警 ----
+        async loadAlerts() {
+          try {
+            // 支持 ?scenario=frost|hail|wind|heat|rain 演示不同预警（无天气 key 时）
+            const sc = new URLSearchParams(location.search).get('scenario');
+            const url = '/api/alerts' + (sc ? ('?scenario=' + sc) : '');
+            const r = await fetch(url);
+            if (!r.ok) throw new Error('alerts ' + r.status);
+            const d = await r.json();
+            this.alerts = d.alerts || [];
+          } catch (e) { this.alerts = []; }
+        },
+        openAlert(a) { this.alertView = a; },
+        closeAlert() { this.alertView = null; this.stopSpeak(); },
+        alertSpeakText(a) {
+          const parts = [`${a.name}预警。${a.threat}`];
+          if (a.measures.before.length) parts.push('来之前要做：' + a.measures.before.join('；'));
+          if (a.measures.after.length) parts.push('过后补救：' + a.measures.after.join('；'));
+          return parts.join('。');
+        },
+        // ---- 语音问答 ----
+        openChat() { this.chat.open = true; },
+        closeChat() {
+          this.chat.open = false;
+          this.stopMic();
+          this.stopSpeak();
+        },
+        scrollChat() {
+          this.$nextTick(() => {
+            const el = this.$refs.chatBd;
+            if (el) el.scrollTop = el.scrollHeight;
+          });
+        },
+        toggleMic() {
+          if (this.chat.recording) { this.stopMic(); return; }
+          const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+          if (!SR) { this.chat.asrUnsupported = true; this.toast('请用打字提问'); return; }
+          const rec = new SR();
+          rec.lang = 'zh-CN';
+          rec.interimResults = false;
+          rec.maxAlternatives = 1;
+          rec.onresult = (e) => {
+            const text = e.results[0][0].transcript;
+            this.chat.input = text;
+            this.stopMic();
+            this.sendChat(text);
+          };
+          rec.onerror = () => { this.stopMic(); this.toast('没听清，再试一次或打字'); };
+          rec.onend = () => { this.chat.recording = false; };
+          this._recognition = rec;
+          this.chat.recording = true;
+          try { rec.start(); } catch (e) { this.stopMic(); }
+        },
+        stopMic() {
+          if (this._recognition) { try { this._recognition.stop(); } catch (e) {} this._recognition = null; }
+          this.chat.recording = false;
+        },
+        async sendChat(text) {
+          text = (text || '').trim();
+          if (!text || this.chat.thinking) return;
+          this.chat.msgs.push({ role: 'user', content: text });
+          this.chat.input = '';
+          this.chat.thinking = true;
+          this.scrollChat();
+          try {
+            const history = this.chat.msgs.slice(0, -1).map(m => ({ role: m.role, content: m.content }));
+            const r = await fetch('/api/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ question: text, history }),
+            });
+            if (!r.ok) throw new Error('chat ' + r.status);
+            const d = await r.json();
+            this.chat.msgs.push({ role: 'assistant', content: d.answer });
+            this.scrollChat();
+            if (this.ttsAvailable) this.speak(d.answer);   // 自动朗读回答
+          } catch (e) {
+            this.chat.msgs.push({ role: 'assistant', content: '网络不太好，稍后再问我一次。' });
+            this.scrollChat();
+          } finally {
+            this.chat.thinking = false;
+          }
+        },
+        pickPhoto() {
+          this.$refs.photo.click();
+        },
+        async onPhoto(e) {
+          const f = e.target.files && e.target.files[0];
+          e.target.value = '';          // 允许再次选同一文件
+          if (!f) return;
+          this.diag = { open: true, loading: true, result: null };
+          try {
+            const fd = new FormData();
+            fd.append('file', f);
+            const url = '/api/diagnose' + (this.useMock ? '?mock=1' : '');
+            const r = await fetch(url, { method: 'POST', body: fd });
+            if (!r.ok) throw new Error('status ' + r.status);
+            this.diag.result = await r.json();
+          } catch (err) {
+            // 友好降级（R-07）
+            this.diag.result = {
+              candidates: [],
+              confidence_note: '网络不太好，照片没传成功，稍后再试试。',
+              next_actions: ['稍后重试'],
+              disclaimer: '',
+            };
+          } finally {
+            this.diag.loading = false;
+          }
+        },
+        closeDiag() {
+          this.diag.open = false;
+          this.stopSpeak();
+        },
+        // ---- 语音播报 ----
+        async checkTts() {
+          try {
+            const r = await fetch('/api/tts/available');
+            const d = await r.json();
+            this.ttsAvailable = !!d.available;
+          } catch (e) { this.ttsAvailable = false; }
+        },
+        taskText(t) {
+          return `${t.category}。${t.title}。${t.detail}`;
+        },
+        diagSpeakText() {
+          const res = this.diag.result;
+          if (!res) return '';
+          let s = res.identification_raw + '。' + res.confidence_note;
+          const c = res.candidates && res.candidates[0];
+          if (c) {
+            s += `。农业防治：${c.cultural_control}。用药：${c.pesticide.note}`;
+          }
+          return s;
+        },
+        stopSpeak() {
+          if (this._audio) { try { this._audio.pause(); } catch (e) {} this._audio = null; }
+          this.speaking = '';
+        },
+        async speak(text) {
+          text = (text || '').trim();
+          if (!text) return;
+          if (this.speaking === text) { this.stopSpeak(); return; }  // 再点一次=停止
+          this.stopSpeak();
+          this.speaking = text;
+          try {
+            const r = await fetch('/api/tts', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text }),
+            });
+            if (!r.ok) throw new Error('tts ' + r.status);
+            const blob = await r.blob();
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            this._audio = audio;
+            audio.onended = () => { this.speaking = ''; URL.revokeObjectURL(url); };
+            audio.onerror = () => { this.speaking = ''; this.toast('播放失败，稍后再试'); };
+            await audio.play();
+          } catch (e) {
+            this.speaking = '';
+            this.toast('语音暂时不可用');
+          }
+        },
+        toast(msg) {
+          this.toastMsg = msg;
+          clearTimeout(this._toastTimer);
+          this._toastTimer = setTimeout(() => (this.toastMsg = ''), 1800);
+        },
+      },
+    }).mount('#app');
+
+    // 注册 Service Worker（离线壳）。仅在安全环境（HTTPS 或 localhost）可用。
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>

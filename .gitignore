@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+config/config.json
+logs/
+cache/
+data/vector_index/
+data/uploads/
+.claude/
+
+.idea/
+.vscode/
+*.bak

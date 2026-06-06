@@ -1,0 +1,55 @@
+{
+  "_comment": "复制为 config.json 后填入真实 API key；config.json 不要提交到 Git。可用 ${ENV_VAR} 占位读取环境变量。",
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8770
+  },
+  "weather": {
+    "provider": "qweather",
+    "api_key": "${QWEATHER_API_KEY}",
+    "default_location": {
+      "lat": 34.27,
+      "lon": 108.93,
+      "name": "陕西西安"
+    }
+  },
+  "diagnose": {
+    "keep_uploaded_images_days": 0,
+    "_comment": "0 表示不留存，处理完即删；>0 表示保留天数"
+  },
+  "ai": {
+    "_note": "active 用原生 minimax(MiniMax-Text-01，快、即出正文)。vision 已验证模型名为 abab7-chat-preview(旧名 MiniMax-VL-01 已失效)。minimax_anthropic(M2.7)是思考模型，max_tokens 小会出空响应，仅在需要复杂推理时用。",
+    "active": "minimax",
+    "vision_provider": "minimax",
+    "tts_provider": "mimo",
+    "providers": {
+      "minimax": {
+        "type": "minimax",
+        "api_key": "${MINIMAX_API_KEY}",
+        "group_id": "${MINIMAX_GROUP_ID}",
+        "enable_vision": true,
+        "models": {
+          "text": "MiniMax-Text-01",
+          "tts": "speech-01-turbo",
+          "vision": "abab7-chat-preview"
+        }
+      },
+      "minimax_anthropic": {
+        "type": "minimax_anthropic",
+        "api_key": "${MINIMAX_API_KEY}",
+        "models": {
+          "text": "MiniMax-M2.7-highspeed"
+        }
+      },
+      "mimo": {
+        "type": "mimo",
+        "_note": "Token Plan key（tp- 开头）必须配专属 base_url：https://token-plan-cn.xiaomimimo.com/v1；按量计费/赠送余额用 https://api.xiaomimimo.com/v1。两套 key+地址独立。一个订阅同时覆盖文字与 TTS。",
+        "api_key": "${MIMO_API_KEY}",
+        "base_url": "https://token-plan-cn.xiaomimimo.com/v1",
+        "default_voice": "Chloe",
+        "format": "wav",
+        "models": { "text": "mimo-v2.5", "tts": "mimo-v2.5-tts" }
+      }
+    }
+  }
+}
