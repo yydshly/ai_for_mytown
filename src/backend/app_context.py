@@ -11,6 +11,8 @@ from typing import Any
 from .domain.crops import CropRegistry
 from .infra.db import Database
 from .infra.safeio import read_json
+from .repositories.user_repository import UserRepository
+from .services.auth_service import AuthService
 from .services.knowledge_manager import KnowledgeManager
 
 
@@ -30,6 +32,8 @@ class AppContext:
 
     # 持久化（地块、农事日志等）
     db: Database = field(init=False)
+    # 认证（多用户地基）
+    auth: AuthService = field(init=False)
 
     def __post_init__(self):
         self.data_dir = self.project_root / "data"
@@ -39,6 +43,7 @@ class AppContext:
         self.knowledge = KnowledgeManager(self.crops)
         self.db = Database(self.data_dir / "app.db")
         self.db.init_schema()
+        self.auth = AuthService(UserRepository(self.db))
 
 
 def build_context(project_root: Path) -> AppContext:

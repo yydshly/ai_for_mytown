@@ -76,6 +76,23 @@ _MIGRATIONS: list[str] = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_ledger_plot ON ledger_entries(plot_id, date)",
+    """
+    CREATE TABLE IF NOT EXISTS users (
+        id           TEXT PRIMARY KEY,
+        username     TEXT NOT NULL UNIQUE,
+        display_name TEXT DEFAULT '',
+        pwd_hash     TEXT NOT NULL,
+        salt         TEXT NOT NULL,
+        created_at   TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS sessions (
+        token      TEXT PRIMARY KEY,
+        user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL
+    )
+    """,
 ]
 
 

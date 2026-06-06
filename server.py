@@ -22,6 +22,7 @@ from src.backend.infra.logging_setup import setup_logging  # noqa: E402
 from src.backend.routes import (  # noqa: E402
     ai_routes,
     alert_routes,
+    auth_routes,
     calendar_routes,
     chat_routes,
     contact_routes,
@@ -55,6 +56,7 @@ def create_app() -> tuple[FastAPI, "object"]:
     )
 
     runtime_routes.register(app, ctx)
+    auth_routes.register(app, ctx)
     crop_routes.register(app, ctx)
     plot_routes.register(app, ctx)
     log_routes.register(app, ctx)
