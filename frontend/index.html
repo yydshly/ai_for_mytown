@@ -407,6 +407,7 @@
               </div>
               <div class="plot-actions">
                 <button class="pbtn fill" v-if="p.id !== activePlotId" @click="setActive(p)">设为当前</button>
+                <button class="pbtn" @click="openLogs(p)">📒 农事记录</button>
                 <button class="pbtn" @click="editPlot(p)">编辑</button>
                 <button class="pbtn danger" @click="removePlot(p)">删除</button>
               </div>
@@ -441,6 +442,50 @@
       </div>
     </div>
 
+    <!-- 农事记录浮层 -->
+    <div class="overlay" v-if="logView" @click.self="closeLogs">
+      <div class="sheet" style="height:90vh">
+        <div class="sheet-hd">
+          <span>📒 {{ logView.plotName }} · 农事记录</span>
+          <span class="close" @click="closeLogs">✕</span>
+        </div>
+        <div class="sheet-bd">
+          <template v-if="!logView.form">
+            <button class="add-plot-btn" @click="newLog">＋ 记一笔</button>
+            <div v-if="!logView.logs.length" class="chat-empty">还没有记录。打了药、施了肥、疏了果，随手记一笔，方便以后复盘。</div>
+            <div v-for="g in logView.logs" :key="g.id" class="plot-card">
+              <div class="pname" style="font-size:var(--fs-base)">
+                <span class="plot-tag" style="background:var(--amber)">{{ g.category }}</span>
+                {{ g.date }}
+              </div>
+              <div style="font-size:var(--fs-lg);font-weight:700;margin-top:6px">{{ g.title }}</div>
+              <div class="pmeta" v-if="g.detail">{{ g.detail }}</div>
+              <div class="plot-actions">
+                <button class="pbtn danger" @click="removeLog(g)">删除</button>
+              </div>
+            </div>
+          </template>
+
+          <div class="pform" v-else>
+            <label>日期</label>
+            <input v-model="logView.form.date" type="date" />
+            <label>类别</label>
+            <select v-model="logView.form.category">
+              <option v-for="c in logCategories" :key="c" :value="c">{{ c }}</option>
+            </select>
+            <label>做了什么 *</label>
+            <input v-model="logView.form.title" placeholder="如：喷杀菌剂防褐斑病" />
+            <label>备注</label>
+            <input v-model="logView.form.detail" placeholder="用了什么药/多少量/天气等（可空）" />
+            <div class="plot-actions" style="margin-top:16px">
+              <button class="pbtn fill" @click="saveLog">保存</button>
+              <button class="pbtn" @click="logView.form = null">取消</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 底部导航 -->
     <div class="tabbar">
       <div class="tab active"><span class="ic">🏠</span>首页</div>
@@ -463,6 +508,8 @@
           activePlotId: localStorage.getItem('activePlotId') || '',
           plotView: false,
           plotForm: null,
+          logView: null,
+          logCategories: ['施肥','打药','修剪','疏花疏果','套袋','灌溉','采收','巡园','其他'],
           region: '陕西关中',
           dateText: '',
           stage: null,
@@ -591,6 +638,45 @@
           this.applyActivePlot();
           this.reloadCropData();
           this.toast('已设为当前园子');
+        },
+        // ---- 农事记录（D2） ----
+        async openLogs(p) {
+          this.plotView = false;   // 关闭地块列表浮层，避免叠层
+          this.logView = { plotId: p.id, plotName: p.name, logs: [], form: null };
+          await this.loadLogs();
+        },
+        closeLogs() { this.logView = null; this.plotView = true; },  // 返回地块列表
+        async loadLogs() {
+          try {
+            const r = await fetch(`/api/plots/${this.logView.plotId}/logs`);
+            const d = await r.json();
+            this.logView.logs = d.logs || [];
+          } catch (e) { this.logView.logs = []; }
+        },
+        newLog() {
+          const today = new Date().toISOString().slice(0, 10);
+          this.logView.form = { date: today, category: this.logCategories[0], title: '', detail: '' };
+        },
+        async saveLog() {
+          const f = this.logView.form;
+          if (!f.title.trim()) { this.toast('请填做了什么'); return; }
+          try {
+            const r = await fetch(`/api/plots/${this.logView.plotId}/logs`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(f),
+            });
+            if (!r.ok) throw new Error('save ' + r.status);
+            this.logView.form = null;
+            await this.loadLogs();
+            this.toast('已记录');
+          } catch (e) { this.toast('保存失败，稍后再试'); }
+        },
+        async removeLog(g) {
+          try {
+            await fetch('/api/logs/' + g.id, { method: 'DELETE' });
+            await this.loadLogs();
+            this.toast('已删除');
+          } catch (e) { this.toast('删除失败'); }
         },
         async loadToday() {
           try {

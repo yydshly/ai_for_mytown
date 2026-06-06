@@ -79,6 +79,14 @@ Phase 3c（语音问答）✅
 > ⚠️ 手机上**语音输入(ASR)和"添加到主屏幕"需要 HTTPS**，纯局域网 http 不行。
 > 用带 https 的内网穿透（cpolar 等）一并解决可达性与安全环境。
 
+Phase 6（农事日志 D2）✅
+- `domain/activity_log.py` + `repositories/activity_log_repository.py`（复用 repository 分层）
+- `activity_logs` 表（外键→plots，**级联删除**）；`routes/log_routes.py`
+  `GET/POST /api/plots/{id}/logs`、`DELETE /api/logs/{id}`、`GET /api/log-categories`
+- 前端"我的园子→农事记录"：按地块记录施肥/打药/修剪等，倒序列表 + 记一笔
+- 价值：构成"建议→执行→记录→复盘"闭环，是知识沉淀（L3）与安全间隔期计算的数据源
+- `latest_by_category` 已备好（供后续"距上次打药N天"提示）
+
 Phase 5（持久化 + 地块档案 D1）✅
 - **SQLite 持久化层**（ADR-002）：`infra/db.py`（连接/schema/迁移），数据在 `data/app.db`（gitignore）
 - **新增 `repositories/` 数据访问层**：SQL 隔离在此，routes/services 不直接写 SQL

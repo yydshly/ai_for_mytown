@@ -31,6 +31,18 @@ _MIGRATIONS: list[str] = [
         updated_at    TEXT NOT NULL
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS activity_logs (
+        id         TEXT PRIMARY KEY,
+        plot_id    TEXT NOT NULL REFERENCES plots(id) ON DELETE CASCADE,
+        date       TEXT NOT NULL,
+        category   TEXT NOT NULL,
+        title      TEXT NOT NULL,
+        detail     TEXT DEFAULT '',
+        created_at TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_logs_plot ON activity_logs(plot_id, date)",
 ]
 
 
