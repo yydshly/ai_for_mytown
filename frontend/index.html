@@ -1157,7 +1157,7 @@
             const r = await fetch('/api/chat', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ question: text, history, crop: this.crop }),
+              body: JSON.stringify({ question: text, history, crop: this.crop, plot_id: this.activePlotId }),
             });
             if (!r.ok) throw new Error('chat ' + r.status);
             const d = await r.json();

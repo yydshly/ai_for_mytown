@@ -40,6 +40,7 @@ def register(app, ctx) -> None:
         cid = ctx.crops.resolve(payload.get("crop"))
         kb = ctx.knowledge.kb(cid)
         bundle = ctx.crops.knowledge(cid)
-        return await svc.answer(kb, bundle, question, history)
+        plot_id = (payload.get("plot_id") or "").strip() or None
+        return await svc.answer(kb, bundle, question, history, plot_id=plot_id)
 
     app.include_router(r)

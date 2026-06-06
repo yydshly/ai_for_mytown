@@ -16,6 +16,8 @@ from ...ai.factory import make_provider
 from ...ai.tasks import chat_with_context
 from ..domain.crops import CropKnowledge
 from ..infra.safeio import read_json
+from ..repositories.activity_log_repository import ActivityLogRepository
+from ..repositories.plot_repository import PlotRepository
 from .knowledge_base import KnowledgeBase
 from .phenology import current_stage, load_stages
 
@@ -71,9 +73,24 @@ class ChatService:
             )
         return stage_name, snippets
 
+    def _plot_snippet(self, plot_id: str) -> str:
+        """当前地块的最近农事，喂给问答让回答更贴这块地。"""
+        plot = PlotRepository(self.ctx.db).get(plot_id)
+        if plot is None:
+            return ""
+        parts = [f"当前地块：{plot.name}"]
+        if plot.variety:
+            parts.append(f"品种 {plot.variety}")
+        logs = ActivityLogRepository(self.ctx.db).list_by_plot(plot_id, limit=5)
+        if logs:
+            recent = "；".join(f"{g.date} {g.category}:{g.title}" for g in logs)
+            parts.append(f"最近农事记录：{recent}")
+        return "。".join(parts)
+
     async def answer(
         self, kb: KnowledgeBase, bundle: CropKnowledge,
         question: str, history: list[dict] | None = None,
+        plot_id: str | None = None,
     ) -> dict:
         question = (question or "").strip()
         if not question:
@@ -84,6 +101,11 @@ class ChatService:
             return {"mode": "unconfigured", "answer": "AI 暂未配置，问题我先记下了，建议咨询农技员。"}
 
         stage_name, snippets = self._context(kb, bundle, question)
+        # 当前地块的最近农事，让回答更贴这块地
+        if plot_id:
+            ps = self._plot_snippet(plot_id)
+            if ps:
+                snippets.insert(0, ps)
         hist_msgs = [
             Message(role=h.get("role", "user"), content=h.get("content", ""))
             for h in (history or [])
