@@ -2,6 +2,7 @@ import pytest
 
 from src.backend.repositories.activity_log_repository import ActivityLogRepository
 from src.backend.repositories.contact_repository import ContactRepository
+from src.backend.repositories.ledger_repository import LedgerRepository
 from src.backend.repositories.notification_repository import NotificationRepository
 from src.backend.repositories.plot_repository import PlotRepository
 
@@ -70,3 +71,25 @@ def test_contact_crud(temp_db):
     assert updated.phone == "13900002222" and updated.name == "张技术员"
     assert repo.delete(c.id) is True
     assert repo.get(c.id) is None
+
+
+# ---- 账本 ----
+
+def test_ledger_summary_and_cascade(temp_db):
+    plots = PlotRepository(temp_db)
+    ledger = LedgerRepository(temp_db)
+    p = plots.create({"name": "园", "crop": "apple"})
+
+    ledger.create(p.id, {"date": "2026-03-01", "kind": "expense", "category": "化肥", "amount": 800})
+    ledger.create(p.id, {"date": "2026-06-01", "kind": "expense", "category": "农药", "amount": 200})
+    ledger.create(p.id, {"date": "2026-10-01", "kind": "income", "category": "销售", "amount": 5000})
+
+    s = ledger.summary(p.id)
+    assert s["total_expense"] == 1000.0
+    assert s["total_income"] == 5000.0
+    assert s["net"] == 4000.0
+
+    assert len(ledger.list_by_plot(p.id)) == 3
+    # 删除地块 → 账本级联删除
+    plots.delete(p.id)
+    assert ledger.list_by_plot(p.id) == []

@@ -193,6 +193,15 @@
     .add-plot-btn { width:100%; min-height:56px; border:2px dashed var(--green); color:var(--green); background:#fff; border-radius:14px; font-size:var(--fs-lg); font-weight:700; margin-bottom:14px; cursor:pointer; }
     .me-sec { font-size:var(--fs-lg); font-weight:700; margin:18px 2px 10px; color:var(--ink); }
     a.pbtn { text-decoration:none; display:inline-block; }
+    /* 账本汇总 */
+    .ledger-sum { display:flex; gap:10px; margin-bottom:14px; }
+    .ledger-sum .ls-item { flex:1; background:#fff; border:2px solid var(--line); border-radius:14px; padding:12px 6px; text-align:center; }
+    .ls-num { font-size:var(--fs-lg); font-weight:700; }
+    .ls-num.inc { color:#c0392b; }
+    .ls-num.exp { color:var(--green-d); }
+    .ls-lab { font-size:14px; color:var(--ink-2); margin-top:4px; }
+    .inc { color:#c0392b; }
+    .exp { color:var(--green-d); }
   </style>
 </head>
 <body>
@@ -433,6 +442,7 @@
               <div class="plot-actions">
                 <button class="pbtn fill" v-if="p.id !== activePlotId" @click="setActive(p)">设为当前</button>
                 <button class="pbtn" @click="openLogs(p)">📒 农事记录</button>
+                <button class="pbtn" @click="openLedger(p)">💰 账本</button>
                 <button class="pbtn" @click="editPlot(p)">编辑</button>
                 <button class="pbtn danger" @click="removePlot(p)">删除</button>
               </div>
@@ -462,6 +472,60 @@
               <button class="pbtn" @click="plotForm = null">取消</button>
             </div>
             <div class="mic-hint" style="margin-top:10px">经纬度可不填；填了天气预警会按这块地的位置算（需配天气 key）。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 账本浮层 -->
+    <div class="overlay" v-if="ledgerView" @click.self="closeLedger">
+      <div class="sheet" style="height:90vh">
+        <div class="sheet-hd">
+          <span>💰 {{ ledgerView.plotName }} · 账本</span>
+          <span class="close" @click="closeLedger">✕</span>
+        </div>
+        <div class="sheet-bd">
+          <!-- 汇总卡 -->
+          <div class="ledger-sum" v-if="ledgerView.summary">
+            <div class="ls-item"><div class="ls-num exp">{{ fmtMoney(ledgerView.summary.total_expense) }}</div><div class="ls-lab">总投入</div></div>
+            <div class="ls-item"><div class="ls-num inc">{{ fmtMoney(ledgerView.summary.total_income) }}</div><div class="ls-lab">总收入</div></div>
+            <div class="ls-item"><div class="ls-num" :class="ledgerView.summary.net >= 0 ? 'inc' : 'exp'">{{ fmtMoney(ledgerView.summary.net) }}</div><div class="ls-lab">净{{ ledgerView.summary.net >= 0 ? '收益' : '亏损' }}</div></div>
+          </div>
+
+          <template v-if="!ledgerView.form">
+            <div class="plot-actions" style="margin:4px 0 12px">
+              <button class="pbtn fill" @click="newLedger('expense')">＋ 记一笔支出</button>
+              <button class="pbtn fill" @click="newLedger('income')" style="border-color:#c0392b;background:#c0392b">＋ 记一笔收入</button>
+            </div>
+            <div v-if="!ledgerView.entries.length" class="chat-empty">记下买农资、雇人、卖果的钱，年底就知道这地赚不赚。</div>
+            <div v-for="e in ledgerView.entries" :key="e.id" class="plot-card">
+              <div class="pname" style="font-size:var(--fs-base)">
+                <span class="plot-tag" :style="e.kind === 'income' ? 'background:#c0392b' : ''">{{ e.kind === 'income' ? '收入' : '支出' }}</span>
+                {{ e.category || (e.kind === 'income' ? '收入' : '支出') }}
+                <span style="float:right;font-weight:700" :class="e.kind === 'income' ? 'inc' : 'exp'">
+                  {{ e.kind === 'income' ? '+' : '-' }}{{ fmtMoney(e.amount) }}
+                </span>
+              </div>
+              <div class="pmeta">{{ e.date }}{{ e.note ? ' · ' + e.note : '' }}</div>
+              <div class="plot-actions"><button class="pbtn danger" @click="removeLedger(e)">删除</button></div>
+            </div>
+          </template>
+
+          <div class="pform" v-else>
+            <label>{{ ledgerView.form.kind === 'income' ? '收入' : '支出' }}日期</label>
+            <input v-model="ledgerView.form.date" type="date" />
+            <label>类别</label>
+            <select v-model="ledgerView.form.category">
+              <option v-for="c in (ledgerView.form.kind === 'income' ? ledgerCats.income : ledgerCats.expense)" :key="c" :value="c">{{ c }}</option>
+            </select>
+            <label>金额（元）*</label>
+            <input v-model="ledgerView.form.amount" type="number" inputmode="decimal" placeholder="如：800" />
+            <label>备注</label>
+            <input v-model="ledgerView.form.note" placeholder="如：买复合肥两袋（可空）" />
+            <div class="plot-actions" style="margin-top:16px">
+              <button class="pbtn fill" @click="saveLedger">保存</button>
+              <button class="pbtn" @click="ledgerView.form = null">取消</button>
+            </div>
           </div>
         </div>
       </div>
@@ -654,6 +718,8 @@
           plotForm: null,
           logView: null,
           logCategories: ['施肥','打药','修剪','疏花疏果','套袋','灌溉','采收','巡园','其他'],
+          ledgerView: null,
+          ledgerCats: { expense: ['种苗','化肥','农药','套袋','人工','水电','机械','运输','其他'], income: ['销售','补贴','其他'] },
           plotSummary: null,
           library: null,
           calAll: null,
@@ -831,6 +897,51 @@
             this.loadPlotSummary();
             this.toast('已删除');
           } catch (e) { this.toast('删除失败'); }
+        },
+        // ---- 账本（D3） ----
+        fmtMoney(n) { return '¥' + Number(n || 0).toLocaleString('zh-CN'); },
+        async openLedger(p) {
+          this.plotView = false;
+          this.ledgerView = { plotId: p.id, plotName: p.name, entries: [], summary: null, form: null };
+          await this.loadLedger();
+        },
+        closeLedger() { this.ledgerView = null; this.plotView = true; },
+        async loadLedger() {
+          try {
+            const [e, s] = await Promise.all([
+              fetch(`/api/plots/${this.ledgerView.plotId}/ledger`).then(r => r.json()),
+              fetch(`/api/plots/${this.ledgerView.plotId}/ledger/summary`).then(r => r.json()),
+            ]);
+            this.ledgerView.entries = e.entries || [];
+            this.ledgerView.summary = s;
+          } catch (err) { this.ledgerView.entries = []; }
+        },
+        newLedger(kind) {
+          const today = new Date().toISOString().slice(0, 10);
+          const cats = kind === 'income' ? this.ledgerCats.income : this.ledgerCats.expense;
+          this.ledgerView.form = { kind, date: today, category: cats[0], amount: '', note: '' };
+        },
+        async saveLedger() {
+          const f = this.ledgerView.form;
+          const amt = Number(f.amount);
+          if (!f.amount || isNaN(amt) || amt < 0) { this.toast('请填正确金额'); return; }
+          try {
+            const r = await fetch(`/api/plots/${this.ledgerView.plotId}/ledger`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ date: f.date, kind: f.kind, category: f.category, amount: amt, note: f.note }),
+            });
+            if (!r.ok) throw new Error('save ' + r.status);
+            this.ledgerView.form = null;
+            await this.loadLedger();
+            this.toast('已记账');
+          } catch (e) { this.toast('记账失败，稍后再试'); }
+        },
+        async removeLedger(e) {
+          try {
+            await fetch('/api/ledger/' + e.id, { method: 'DELETE' });
+            await this.loadLedger();
+            this.toast('已删除');
+          } catch (err) { this.toast('删除失败'); }
         },
         // ---- 闭环：一键记一笔 + 园子状态 ----
         async loadPlotSummary() {

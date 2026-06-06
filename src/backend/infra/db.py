@@ -63,6 +63,19 @@ _MIGRATIONS: list[str] = [
         created_at TEXT NOT NULL
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS ledger_entries (
+        id         TEXT PRIMARY KEY,
+        plot_id    TEXT NOT NULL REFERENCES plots(id) ON DELETE CASCADE,
+        date       TEXT NOT NULL,
+        kind       TEXT NOT NULL,            -- income | expense
+        category   TEXT DEFAULT '',
+        amount     REAL NOT NULL,            -- 元
+        note       TEXT DEFAULT '',
+        created_at TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_ledger_plot ON ledger_entries(plot_id, date)",
 ]
 
 
