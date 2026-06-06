@@ -57,6 +57,13 @@
     .topbar .stage .win { font-size: 16px; font-weight: 400; opacity: .85; margin-left: 8px; }
     .topbar .summary { font-size: 16px; opacity: .9; margin-top: 6px; }
 
+    /* 园子状态条 */
+    .plot-status { margin: 12px 14px 0; padding: 10px 14px; background: #eef4ff; border-radius: 12px; font-size: 16px; color: #2a4a99; font-weight: 700; }
+
+    /* 农事任务"记一笔"按钮 */
+    .log-it { margin-top: 10px; background: #fff; border: 2px solid var(--green); color: var(--green); border-radius: 18px; padding: 8px 16px; font-size: 16px; font-weight: 700; cursor: pointer; }
+    .log-it:active { transform: scale(.96); }
+
     /* 预警横幅 */
     .alert {
       display: flex; align-items: center; gap: 12px;
@@ -122,6 +129,7 @@
 
     .diag-raw { background: #fff; border: 2px solid var(--green); border-radius: 12px; padding: 14px; font-size: var(--fs-lg); white-space: pre-line; }
     .diag-note { margin: 12px 2px; font-size: 16px; color: var(--amber); }
+    .spray-note { margin: 8px 2px; padding: 10px 14px; background: #fff8e1; border: 2px solid var(--amber); border-radius: 12px; font-size: 16px; color: #8a5a00; }
 
     .cand { background: #fff; border: 2px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
     .cand-name { font-size: var(--fs-xl); font-weight: 700; margin-bottom: 8px; }
@@ -182,6 +190,8 @@
     .pform .two { display:flex; gap:10px; }
     .pform .two > div { flex:1; }
     .add-plot-btn { width:100%; min-height:56px; border:2px dashed var(--green); color:var(--green); background:#fff; border-radius:14px; font-size:var(--fs-lg); font-weight:700; margin-bottom:14px; cursor:pointer; }
+    .me-sec { font-size:var(--fs-lg); font-weight:700; margin:18px 2px 10px; color:var(--ink); }
+    a.pbtn { text-decoration:none; display:inline-block; }
   </style>
 </head>
 <body>
@@ -202,6 +212,15 @@
         <button v-if="ttsAvailable" class="speak" :class="{busy: speaking===stage.summary}"
                 @click="speak(stage.summary)">🔊 听</button>
       </div>
+    </div>
+
+    <!-- 园子状态（有当前地块时）-->
+    <div class="plot-status" v-if="activePlot">
+      🌳 {{ activePlot.name }}
+      <span v-if="plotSummary && plotSummary.last_spray">
+        · 距上次打药 {{ plotSummary.last_spray.days_ago }} 天
+      </span>
+      <span v-else-if="plotSummary">· 还没记录过打药</span>
     </div>
 
     <!-- 预警横幅（真实天气 + 硬规则）-->
@@ -239,14 +258,15 @@
                     @click="speak(taskText(t))">🔊 听</button>
           </div>
           <div class="d">{{ t.detail }}</div>
+          <button class="log-it" @click="quickLog(t.category, t.title)">✓ 做了，记一笔</button>
         </div>
       </div>
       <div class="hint" v-else-if="loadError">{{ loadError }}</div>
       <div class="hint" v-else>加载中…</div>
     </div>
 
-    <div class="wirenote">
-      预览版：物候期、农事、拍照诊断为真实功能；预警、语音问答为占位，将在 Phase 3 接入。
+    <div style="margin:14px">
+      <button class="add-plot-btn" @click="openLibrary">📖 病虫害图鉴（{{ cropName(crop) }}）</button>
     </div>
 
     <!-- 拍照诊断结果浮层 -->
@@ -277,6 +297,9 @@
             <button v-if="ttsAvailable" class="speak lg" :class="{busy: speaking===diagSpeakText()}"
                     @click="speak(diagSpeakText())">🔊 听一遍诊断结果</button>
             <div class="diag-note">{{ diag.result.confidence_note }}</div>
+            <div class="spray-note" v-if="diag.result.plot_context">
+              ⏱ 这块地距上次打药 {{ diag.result.plot_context.days_ago }} 天（{{ diag.result.plot_context.last_spray_date }} {{ diag.result.plot_context.last_spray_title }}）。如需再次用药，请注意安全间隔期，避免重复或过量。
+            </div>
 
             <div class="cand" v-for="(c, i) in diag.result.candidates" :key="i">
               <div class="cand-name">
@@ -306,6 +329,7 @@
             </div>
 
             <div class="diag-actions">
+              <div class="chip" v-if="diag.result.candidates.length" @click="logDiagnosis">✓ 记一笔</div>
               <div class="chip" @click="pickPhoto">📷 重拍</div>
               <div class="chip" @click="toast('一键联系农技员：Phase 1 后续接入')">📞 咨询农技员</div>
             </div>
@@ -486,12 +510,102 @@
       </div>
     </div>
 
+    <!-- 病虫害图鉴浮层 -->
+    <div class="overlay" v-if="library" @click.self="closeLibrary">
+      <div class="sheet" style="height:90vh">
+        <div class="sheet-hd">
+          <span>📖 {{ library.cropName }} 病虫害图鉴</span>
+          <span class="close" @click="closeLibrary">✕</span>
+        </div>
+        <div class="sheet-bd">
+          <div v-if="!library.items.length" class="chat-empty">暂无图鉴条目。</div>
+          <div v-for="(it, i) in library.items" :key="it.id" class="cand">
+            <div class="cand-name" @click="library.open = (library.open === i ? -1 : i)" style="cursor:pointer">
+              {{ it.name }}
+              <span class="badge" :class="it.type === 'pest' ? 'pest' : 'dis'">{{ it.type === 'pest' ? '虫害' : '病害' }}</span>
+              <span style="float:right;font-size:18px">{{ library.open === i ? '▲' : '▼' }}</span>
+            </div>
+            <template v-if="library.open === i">
+              <div class="cand-row"><b>症状：</b>{{ it.symptoms }}</div>
+              <div class="cand-row"><b>怎么认：</b>{{ it.identify_cues }}</div>
+              <div class="cand-row" v-if="it.confusable_with"><b>易混淆：</b>{{ it.confusable_with }}</div>
+              <div class="cand-row"><b>农业/物理防治：</b>{{ it.cultural_control }}</div>
+              <button v-if="ttsAvailable" class="speak" :class="{busy: speaking===libSpeakText(it)}"
+                      @click="speak(libSpeakText(it))">🔊 听</button>
+              <div class="cand-src">出处：{{ it.source }}（{{ it.review_status === 'verified' ? '已审核' : '待审核' }}）</div>
+            </template>
+          </div>
+        </div>
+        <div class="sheet-ft">图鉴内容仅供参考，用药与重大决策请咨询当地农技员。</div>
+      </div>
+    </div>
+
+    <!-- "我"：设置 / 通讯录 / 关于 -->
+    <div class="overlay" v-if="meView" @click.self="closeMe">
+      <div class="sheet" style="height:90vh">
+        <div class="sheet-hd">
+          <span>👤 我的</span>
+          <span class="close" @click="closeMe">✕</span>
+        </div>
+        <div class="sheet-bd">
+          <!-- 通讯录（一键拨号 F4）-->
+          <div class="me-sec">📞 通讯录（点电话直接打）</div>
+          <template v-if="!contactForm">
+            <button class="add-plot-btn" @click="newContact">＋ 添加联系人</button>
+            <div v-if="!contacts.length" class="chat-empty">加上农技员、子女、邻居的电话，遇事一键就能打。</div>
+            <div v-for="c in contacts" :key="c.id" class="plot-card">
+              <div class="pname">
+                {{ c.name }}<span class="plot-tag">{{ c.role }}</span>
+              </div>
+              <div class="pmeta" v-if="c.note">{{ c.note }}</div>
+              <div class="plot-actions">
+                <a class="pbtn fill" :href="'tel:' + c.phone">📞 打给 {{ c.name }}（{{ c.phone }}）</a>
+                <button class="pbtn" @click="editContact(c)">编辑</button>
+                <button class="pbtn danger" @click="removeContact(c)">删除</button>
+              </div>
+            </div>
+          </template>
+          <div class="pform" v-else>
+            <label>姓名 *</label>
+            <input v-model="contactForm.name" placeholder="如：张技术员" />
+            <label>电话 *</label>
+            <input v-model="contactForm.phone" type="tel" placeholder="如：13800001111" />
+            <label>身份</label>
+            <select v-model="contactForm.role">
+              <option v-for="r in contactRoles" :key="r" :value="r">{{ r }}</option>
+            </select>
+            <label>备注</label>
+            <input v-model="contactForm.note" placeholder="如：管苹果病虫害（可空）" />
+            <div class="plot-actions" style="margin-top:16px">
+              <button class="pbtn fill" @click="saveContact">保存</button>
+              <button class="pbtn" @click="contactForm = null">取消</button>
+            </div>
+          </div>
+
+          <!-- 快捷入口 -->
+          <div class="me-sec">🔗 快捷</div>
+          <div class="plot-actions">
+            <button class="pbtn" @click="closeMe(); openLibrary()">📖 病虫害图鉴</button>
+            <button class="pbtn" @click="closeMe(); openPlots()">🌳 我的园子</button>
+          </div>
+
+          <!-- 关于 -->
+          <div class="me-sec">ℹ️ 关于</div>
+          <div class="pmeta" style="padding:0 2px">
+            AI 助农 · 桃/苹果　预警推送：{{ meInfo.notify || '—' }}<br>
+            AI 识别：{{ meInfo.ai || '—' }}<br>
+            <span style="color:var(--ink-2)">本应用建议由 AI 结合公开农技资料生成，仅供参考；用药与重大决策请咨询当地农技员。</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 底部导航 -->
     <div class="tabbar">
       <div class="tab active"><span class="ic">🏠</span>首页</div>
       <div class="tab" @click="toast('农事日历：开发中')"><span class="ic">📅</span>农事</div>
       <div class="tab" @click="openPlots"><span class="ic">🌳</span>我的园子</div>
-      <div class="tab" @click="toast('个人中心：开发中')"><span class="ic">👤</span>我</div>
+      <div class="tab" @click="openMe"><span class="ic">👤</span>我</div>
     </div>
 
     <div class="toast" v-if="toastMsg">{{ toastMsg }}</div>
@@ -510,6 +624,13 @@
           plotForm: null,
           logView: null,
           logCategories: ['施肥','打药','修剪','疏花疏果','套袋','灌溉','采收','巡园','其他'],
+          plotSummary: null,
+          library: null,
+          meView: false,
+          contacts: [],
+          contactForm: null,
+          contactRoles: ['农技员','子女','邻居','合作社','其他'],
+          meInfo: {},
           region: '陕西关中',
           dateText: '',
           stage: null,
@@ -574,6 +695,7 @@
           this.stage = null; this.tasks = []; this.alerts = []; this.loadError = '';
           this.loadToday();
           this.loadAlerts();
+          this.loadPlotSummary();
         },
         // ---- 地块（我的园子） ----
         cropName(id) { const c = this.crops.find(x => x.id === id); return c ? c.name : id; },
@@ -675,6 +797,113 @@
           try {
             await fetch('/api/logs/' + g.id, { method: 'DELETE' });
             await this.loadLogs();
+            this.loadPlotSummary();
+            this.toast('已删除');
+          } catch (e) { this.toast('删除失败'); }
+        },
+        // ---- 闭环：一键记一笔 + 园子状态 ----
+        async loadPlotSummary() {
+          if (!this.activePlotId) { this.plotSummary = null; return; }
+          try {
+            const r = await fetch(`/api/plots/${this.activePlotId}/summary`);
+            this.plotSummary = await r.json();
+          } catch (e) { this.plotSummary = null; }
+        },
+        mapLogCategory(taskCat) {
+          const m = {
+            套袋:'套袋', 施肥:'施肥', 修剪:'修剪', 疏果:'疏花疏果', 疏花:'疏花疏果',
+            授粉:'疏花疏果', 灌水:'灌溉', 灌溉:'灌溉', 采收:'采收', 防病:'打药', 防虫:'打药',
+          };
+          return m[taskCat] || '巡园';
+        },
+        async _postLog(category, title, detail) {
+          if (!this.activePlotId) { this.toast('请先在"我的园子"设一块当前地'); return false; }
+          try {
+            const r = await fetch(`/api/plots/${this.activePlotId}/logs`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ category, title, detail: detail || '' }),
+            });
+            if (!r.ok) throw new Error('log ' + r.status);
+            this.loadPlotSummary();
+            return true;
+          } catch (e) { this.toast('记录失败，稍后再试'); return false; }
+        },
+        async quickLog(taskCat, title) {
+          const ok = await this._postLog(this.mapLogCategory(taskCat), title, '');
+          if (ok) this.toast('已记到' + (this.activePlot ? this.activePlot.name : '园子'));
+        },
+        async logDiagnosis() {
+          const c = this.diag.result && this.diag.result.candidates[0];
+          if (!c) return;
+          const ok = await this._postLog('巡园', '诊断：' + c.name, c.cultural_control || '');
+          if (ok) this.toast('已记到园子');
+        },
+        // ---- 病虫害图鉴（E3） ----
+        async openLibrary() {
+          this.library = { cropName: this.cropName(this.crop), items: [], open: -1 };
+          try {
+            const r = await fetch('/api/pests' + this.cropQS('?'));
+            const d = await r.json();
+            this.library.items = d.items || [];
+            this.library.cropName = d.crop_name || this.library.cropName;
+          } catch (e) { this.toast('图鉴加载失败，稍后再试'); }
+        },
+        closeLibrary() { this.library = null; this.stopSpeak(); },
+        libSpeakText(it) {
+          return `${it.name}。症状：${it.symptoms}。怎么认：${it.identify_cues}。防治：${it.cultural_control}`;
+        },
+        // ---- "我"：通讯录 + 关于 ----
+        async openMe() {
+          this.meView = true;
+          this.contactForm = null;
+          this.loadContacts();
+          this.loadMeInfo();
+        },
+        closeMe() { this.meView = false; this.contactForm = null; },
+        async loadContacts() {
+          try {
+            const r = await fetch('/api/contacts');
+            const d = await r.json();
+            this.contacts = d.contacts || [];
+          } catch (e) { this.contacts = []; }
+        },
+        async loadMeInfo() {
+          try {
+            const n = await (await fetch('/api/notify/status')).json();
+            this.meInfo = Object.assign({}, this.meInfo, {
+              notify: n.active_channel === 'log' ? '仅记录(未配微信)' : n.active_channel,
+            });
+          } catch (e) {}
+          try {
+            const a = await (await fetch('/api/ai/status')).json();
+            this.meInfo = Object.assign({}, this.meInfo, {
+              ai: a.vision_ready ? '已就绪' : '未配置',
+            });
+          } catch (e) {}
+        },
+        newContact() {
+          this.contactForm = { name: '', phone: '', role: '农技员', note: '' };
+        },
+        editContact(c) { this.contactForm = Object.assign({ _id: c.id }, c); },
+        async saveContact() {
+          const f = this.contactForm;
+          if (!f.name.trim()) { this.toast('请填姓名'); return; }
+          if (!f.phone.trim()) { this.toast('请填电话'); return; }
+          try {
+            const url = f._id ? '/api/contacts/' + f._id : '/api/contacts';
+            const method = f._id ? 'PUT' : 'POST';
+            const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: f.name.trim(), phone: f.phone.trim(), role: f.role, note: f.note || '' }) });
+            if (!r.ok) throw new Error('save ' + r.status);
+            this.contactForm = null;
+            await this.loadContacts();
+            this.toast('已保存');
+          } catch (e) { this.toast('保存失败，稍后再试'); }
+        },
+        async removeContact(c) {
+          try {
+            await fetch('/api/contacts/' + c.id, { method: 'DELETE' });
+            await this.loadContacts();
             this.toast('已删除');
           } catch (e) { this.toast('删除失败'); }
         },
@@ -798,6 +1027,7 @@
             const fd = new FormData();
             fd.append('file', f);
             if (this.crop) fd.append('crop', this.crop);
+            if (this.activePlotId) fd.append('plot_id', this.activePlotId);
             const url = '/api/diagnose' + (this.useMock ? '?mock=1' : '');
             const r = await fetch(url, { method: 'POST', body: fd });
             if (!r.ok) throw new Error('status ' + r.status);

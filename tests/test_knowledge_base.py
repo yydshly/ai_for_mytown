@@ -35,3 +35,14 @@ def test_apple_kb_isolated(kb_apple):
     names = kb_apple.all_names()
     assert "苹果树腐烂病" in names
     assert all("桃" not in n for n in names)
+
+
+def test_list_all_for_library(kb_peach):
+    # 图鉴用：返回全部条目及展示字段
+    items = kb_peach.list_all()
+    assert len(items) == 6
+    first = items[0]
+    for key in ("name", "type", "symptoms", "identify_cues", "cultural_control", "source"):
+        assert key in first
+    assert any(i["type"] == "disease" for i in items)
+    assert any(i["type"] == "pest" for i in items)

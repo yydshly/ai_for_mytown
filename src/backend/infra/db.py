@@ -53,6 +53,16 @@ _MIGRATIONS: list[str] = [
         UNIQUE(plot_id, alert_kind, date)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS contacts (
+        id         TEXT PRIMARY KEY,
+        name       TEXT NOT NULL,
+        role       TEXT DEFAULT '其他',
+        phone      TEXT NOT NULL,
+        note       TEXT DEFAULT '',
+        created_at TEXT NOT NULL
+    )
+    """,
 ]
 
 

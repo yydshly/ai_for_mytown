@@ -1,6 +1,7 @@
 import pytest
 
 from src.backend.repositories.activity_log_repository import ActivityLogRepository
+from src.backend.repositories.contact_repository import ContactRepository
 from src.backend.repositories.notification_repository import NotificationRepository
 from src.backend.repositories.plot_repository import PlotRepository
 
@@ -56,3 +57,16 @@ def test_notification_dedup(temp_db):
     assert repo.was_sent("plot1", "hail", "2026-06-06") is False
     # 重复 mark 不报错
     repo.mark_sent("plot1", "frost", "2026-06-06")
+
+
+# ---- 通讯录 ----
+
+def test_contact_crud(temp_db):
+    repo = ContactRepository(temp_db)
+    c = repo.create({"name": "张技术员", "phone": "13800001111", "role": "农技员", "note": "管苹果"})
+    assert c.id and c.role == "农技员"
+    assert len(repo.list()) == 1
+    updated = repo.update(c.id, {"phone": "13900002222"})
+    assert updated.phone == "13900002222" and updated.name == "张技术员"
+    assert repo.delete(c.id) is True
+    assert repo.get(c.id) is None

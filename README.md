@@ -79,8 +79,22 @@ Phase 3c（语音问答）✅
 > ⚠️ 手机上**语音输入(ASR)和"添加到主屏幕"需要 HTTPS**，纯局域网 http 不行。
 > 用带 https 的内网穿透（cpolar 等）一并解决可达性与安全环境。
 
+Phase 12（"我"标签页 + 通讯录 F4）✅
+- 联系人实体：domain/contact + repositories/contact_repository + routes/contact_routes（CRUD）
+- "我"标签：**通讯录一键拨号**（tel: 链接，农技员/子女/邻居）—— 老人无障碍兜底（AI 答不出→直接打电话）
+- 快捷入口（图鉴/园子）+ 关于（推送/AI 状态 + 免责声明）
+
+Phase 11（诊断安全上下文）✅
+- 拍照诊断带当前地块 plot_id，结果显示"这块地距上次打药 N 天，注意安全间隔期"（农事日志反哺用药安全）
+
+Phase 10（病虫害图鉴 E3）✅
+- KnowledgeBase.list_all + GET /api/pests；首页"📖 病虫害图鉴"可展开 + 听，父母可主动查病
+
+Phase 9（闭环整合）✅
+- 一键"记一笔"（诊断/日历→当前园子）；首页"距上次打药 N 天"；GET /api/plots/{id}/summary
+
 Phase 8（回归测试 pytest）✅
-- `tests/` 27 个用例，覆盖纯逻辑层与仓储层（分层让各层可独立单测）：
+- `tests/` 28+ 个用例，覆盖纯逻辑层与仓储层（分层让各层可独立单测）：
   物候期（跨年休眠/多作物差异）、作物注册表（解析/回退）、知识库检索+**用药护栏**、
   灾害规则（霜冻按物候分级/冰雹/措施）、地块/日志/去重仓储（含级联删除）、诊断 mock
 - 仓储测试用 tmp_path 独立 SQLite，不碰真实数据；异步用例用 asyncio.run（免 pytest-asyncio）

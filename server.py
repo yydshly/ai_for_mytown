@@ -24,10 +24,12 @@ from src.backend.routes import (  # noqa: E402
     alert_routes,
     calendar_routes,
     chat_routes,
+    contact_routes,
     crop_routes,
     diagnose_routes,
     log_routes,
     notify_routes,
+    pest_routes,
     plot_routes,
     runtime_routes,
     static_routes,
@@ -55,8 +57,10 @@ def create_app() -> tuple[FastAPI, "object"]:
     crop_routes.register(app, ctx)
     plot_routes.register(app, ctx)
     log_routes.register(app, ctx)
+    contact_routes.register(app, ctx)
     calendar_routes.register(app, ctx)
     diagnose_routes.register(app, ctx)
+    pest_routes.register(app, ctx)
     alert_routes.register(app, ctx)
     chat_routes.register(app, ctx)
     ai_routes.register(app, ctx)

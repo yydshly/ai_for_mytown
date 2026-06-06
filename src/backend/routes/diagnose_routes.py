@@ -7,9 +7,12 @@ POST /api/diagnose  multipart：file=图片，可选 note=文字补充
 处理完图片字节即丢弃。
 """
 import logging
+from datetime import date as _date
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
+from ..repositories.activity_log_repository import ActivityLogRepository
+from ..repositories.plot_repository import PlotRepository
 from ..services.diagnose import diagnose
 
 log = logging.getLogger("routes.diagnose")
@@ -17,15 +20,25 @@ log = logging.getLogger("routes.diagnose")
 MAX_IMAGE_BYTES = 12 * 1024 * 1024  # 12MB
 
 
+def _days_ago(date_str: str) -> int | None:
+    try:
+        return (_date.today() - _date.fromisoformat(date_str)).days
+    except Exception:
+        return None
+
+
 def register(app, ctx) -> None:
     r = APIRouter()
     keep_days = ((ctx.config.get("diagnose") or {}).get("keep_uploaded_images_days")) or 0
+    plots = PlotRepository(ctx.db)
+    logs = ActivityLogRepository(ctx.db)
 
     @r.post("/api/diagnose")
     async def post_diagnose(
         file: UploadFile = File(...),
         note: str = Form(""),
         crop: str = Form(""),
+        plot_id: str = Form(""),
         mock: int = Query(0),
     ):
         data = await file.read()
@@ -48,6 +61,16 @@ def register(app, ctx) -> None:
             crop_name=(meta.name if meta else "果树"),
             force_mock=bool(mock),
         )
+
+        # 安全上下文：当前地块距上次打药天数（防重复/超量用药）
+        if plot_id and plots.get(plot_id) is not None:
+            last = logs.latest_by_category(plot_id, "打药")
+            if last:
+                result["plot_context"] = {
+                    "last_spray_date": last.date,
+                    "last_spray_title": last.title,
+                    "days_ago": _days_ago(last.date),
+                }
 
         # 隐私：默认不留存图片（keep_days=0 时 data 随函数结束被回收，不写盘）
         if keep_days and keep_days > 0:

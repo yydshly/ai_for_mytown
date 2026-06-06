@@ -135,6 +135,26 @@ class KnowledgeBase:
         """该作物所有病虫的主名，用于动态拼装 vision 提示词。"""
         return [e.get("name", "") for e in self._pests if e.get("name")]
 
+    def list_all(self) -> list[dict]:
+        """全部病虫条目（图鉴用）。返回面向展示的字段。"""
+        out: list[dict] = []
+        for e in self._pests:
+            md = e.get("metadata") or {}
+            out.append({
+                "id": e.get("id", ""),
+                "name": e.get("name", ""),
+                "type": e.get("type", ""),
+                "aliases": e.get("aliases") or [],
+                "symptoms": e.get("symptoms", ""),
+                "identify_cues": e.get("identify_cues", ""),
+                "confusable_with": e.get("confusable_with", ""),
+                "cultural_control": e.get("cultural_control", ""),
+                "source": md.get("source", ""),
+                "trust_level": md.get("trust_level", ""),
+                "review_status": md.get("review_status", ""),
+            })
+        return out
+
     def sample_disease_name(self) -> str:
         """取第一个病害名，给无 key 时的 mock 诊断用（保证按作物正确）。"""
         for e in self._pests:

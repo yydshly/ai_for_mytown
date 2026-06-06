@@ -17,6 +17,13 @@ from ..repositories.plot_repository import PlotRepository
 log = logging.getLogger("routes.log")
 
 
+def _days_ago(date_str: str) -> int | None:
+    try:
+        return (_date.today() - _date.fromisoformat(date_str)).days
+    except Exception:
+        return None
+
+
 def register(app, ctx) -> None:
     r = APIRouter()
     repo = ActivityLogRepository(ctx.db)
@@ -55,5 +62,25 @@ def register(app, ctx) -> None:
         if not repo.delete(log_id):
             raise HTTPException(404, "记录不存在")
         return {"ok": True}
+
+    @r.get("/api/plots/{plot_id}/summary")
+    def plot_summary(plot_id: str):
+        """地块速览：最近一次打药 + 距今天数（用于安全间隔期/复盘提示）。"""
+        if plots.get(plot_id) is None:
+            raise HTTPException(404, "地块不存在")
+        last_spray = repo.latest_by_category(plot_id, "打药")
+        all_logs = repo.list_by_plot(plot_id, limit=1000)
+        return {
+            "plot_id": plot_id,
+            "log_count": len(all_logs),
+            "last_spray": (
+                {
+                    "date": last_spray.date,
+                    "title": last_spray.title,
+                    "days_ago": _days_ago(last_spray.date),
+                }
+                if last_spray else None
+            ),
+        }
 
     app.include_router(r)
