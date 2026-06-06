@@ -49,6 +49,9 @@
       background: linear-gradient(135deg, var(--green), var(--green-d));
       color: #fff; padding: 16px 18px 18px;
     }
+    .crop-row { display: flex; gap: 8px; margin-bottom: 10px; }
+    .crop-pill { background: rgba(255,255,255,.2); color: #fff; border: 2px solid rgba(255,255,255,.45); border-radius: 20px; padding: 6px 18px; font-size: var(--fs-base); font-weight: 700; cursor: pointer; }
+    .crop-pill.on { background: #fff; color: var(--green-d); border-color: #fff; }
     .topbar .date { font-size: var(--fs-base); opacity: .92; }
     .topbar .stage { font-size: var(--fs-xl); font-weight: 700; margin-top: 4px; }
     .topbar .stage .win { font-size: 16px; font-weight: 400; opacity: .85; margin-left: 8px; }
@@ -163,12 +166,32 @@
     .chat-text-row input { flex: 1; font-size: 17px; padding: 12px 14px; border: 2px solid var(--line); border-radius: 12px; }
     .chat-text-row button { background: var(--green); color: #fff; border: none; border-radius: 12px; padding: 0 18px; font-size: 17px; font-weight: 700; }
     .typing { align-self: flex-start; color: var(--ink-2); font-size: 16px; padding: 6px 4px; }
+
+    /* ===== 我的园子（地块管理） ===== */
+    .plot-card { background:#fff; border:2px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+    .plot-card.active { border-color: var(--green); background:#e8f5e9; }
+    .plot-card .pname { font-size:var(--fs-lg); font-weight:700; }
+    .plot-card .pmeta { font-size:16px; color:var(--ink-2); margin-top:4px; }
+    .plot-tag { display:inline-block; font-size:13px; color:#fff; background:var(--green); border-radius:8px; padding:1px 8px; margin-left:6px; vertical-align:2px; }
+    .plot-actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+    .pbtn { border:2px solid var(--green); color:var(--green); background:#fff; border-radius:18px; padding:8px 14px; font-size:15px; font-weight:700; cursor:pointer; }
+    .pbtn.fill { background:var(--green); color:#fff; }
+    .pbtn.danger { border-color:var(--red); color:var(--red); }
+    .pform label { display:block; font-size:16px; font-weight:700; margin:10px 2px 4px; }
+    .pform input, .pform select { width:100%; font-size:17px; padding:11px 12px; border:2px solid var(--line); border-radius:10px; }
+    .pform .two { display:flex; gap:10px; }
+    .pform .two > div { flex:1; }
+    .add-plot-btn { width:100%; min-height:56px; border:2px dashed var(--green); color:var(--green); background:#fff; border-radius:14px; font-size:var(--fs-lg); font-weight:700; margin-bottom:14px; cursor:pointer; }
   </style>
 </head>
 <body>
   <div id="app">
     <!-- 顶部物候条 -->
     <div class="topbar">
+      <div class="crop-row" v-if="crops.length > 1">
+        <button v-for="c in crops" :key="c.id" class="crop-pill"
+                :class="{on: c.id === crop}" @click="switchCrop(c.id)">{{ c.name }}</button>
+      </div>
       <div class="date">{{ dateText }} · {{ region }}</div>
       <div class="stage" v-if="stage">
         {{ stage.name }}<span class="win">{{ stage.window }}</span>
@@ -361,11 +384,68 @@
       </div>
     </div>
 
+    <!-- 我的园子（地块管理）浮层 -->
+    <div class="overlay" v-if="plotView" @click.self="closePlots">
+      <div class="sheet" style="height:90vh">
+        <div class="sheet-hd">
+          <span>🌳 我的园子</span>
+          <span class="close" @click="closePlots">✕</span>
+        </div>
+        <div class="sheet-bd">
+          <!-- 列表 -->
+          <template v-if="!plotForm">
+            <button class="add-plot-btn" @click="newPlot">＋ 添加一块地</button>
+            <div v-if="!plots.length" class="chat-empty">还没有地块。添加后，首页就按这块地的作物和位置来。</div>
+            <div v-for="p in plots" :key="p.id" class="plot-card" :class="{active: p.id === activePlotId}">
+              <div class="pname">
+                {{ p.name }}
+                <span class="plot-tag">{{ cropName(p.crop) }}</span>
+                <span v-if="p.id === activePlotId" class="plot-tag" style="background:var(--amber)">当前</span>
+              </div>
+              <div class="pmeta">
+                {{ p.variety ? p.variety + ' · ' : '' }}{{ p.location_name || '未填位置' }}{{ p.area_mu ? ' · ' + p.area_mu + ' 亩' : '' }}
+              </div>
+              <div class="plot-actions">
+                <button class="pbtn fill" v-if="p.id !== activePlotId" @click="setActive(p)">设为当前</button>
+                <button class="pbtn" @click="editPlot(p)">编辑</button>
+                <button class="pbtn danger" @click="removePlot(p)">删除</button>
+              </div>
+            </div>
+          </template>
+
+          <!-- 新增/编辑表单 -->
+          <div class="pform" v-else>
+            <label>地块名称 *</label>
+            <input v-model="plotForm.name" placeholder="如：洛川东塬苹果园" />
+            <label>作物 *</label>
+            <select v-model="plotForm.crop">
+              <option v-for="c in crops" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+            <label>品种</label>
+            <input v-model="plotForm.variety" placeholder="如：富士 / 秦王" />
+            <label>所在村镇</label>
+            <input v-model="plotForm.location_name" placeholder="如：洛川县某村" />
+            <div class="two">
+              <div><label>纬度</label><input v-model="plotForm.lat" type="number" placeholder="35.76" /></div>
+              <div><label>经度</label><input v-model="plotForm.lon" type="number" placeholder="109.43" /></div>
+            </div>
+            <label>面积（亩）</label>
+            <input v-model="plotForm.area_mu" type="number" placeholder="3.5" />
+            <div class="plot-actions" style="margin-top:16px">
+              <button class="pbtn fill" @click="savePlot">保存</button>
+              <button class="pbtn" @click="plotForm = null">取消</button>
+            </div>
+            <div class="mic-hint" style="margin-top:10px">经纬度可不填；填了天气预警会按这块地的位置算（需配天气 key）。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 底部导航 -->
     <div class="tabbar">
       <div class="tab active"><span class="ic">🏠</span>首页</div>
       <div class="tab" @click="toast('农事日历：开发中')"><span class="ic">📅</span>农事</div>
-      <div class="tab" @click="toast('我的园子：开发中')"><span class="ic">🌳</span>我的园子</div>
+      <div class="tab" @click="openPlots"><span class="ic">🌳</span>我的园子</div>
       <div class="tab" @click="toast('个人中心：开发中')"><span class="ic">👤</span>我</div>
     </div>
 
@@ -377,6 +457,12 @@
     createApp({
       data() {
         return {
+          crops: [],
+          crop: localStorage.getItem('crop') || '',
+          plots: [],
+          activePlotId: localStorage.getItem('activePlotId') || '',
+          plotView: false,
+          plotForm: null,
           region: '陕西关中',
           dateText: '',
           stage: null,
@@ -399,22 +485,116 @@
           _recognition: null,
         };
       },
-      mounted() {
+      async mounted() {
         this.dateText = this.fmtDate(new Date());
-        this.loadToday();
         this.checkTts();
-        this.loadAlerts();
+        await this.loadCrops();
+        await this.loadPlots();   // 若有当前地块，用它的作物覆盖
+        this.applyActivePlot();
+        this.reloadCropData();
       },
       computed: {
         topAlert() { return this.alerts.length ? this.alerts[0] : null; },
+        activePlot() { return this.plots.find(p => p.id === this.activePlotId) || null; },
       },
       methods: {
         fmtDate(d) {
           return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
         },
+        // ---- 作物 ----
+        cropQS(prefix) {
+          // 返回 '?crop=x' 或 '&crop=x'，无选中则空
+          return this.crop ? `${prefix}crop=${encodeURIComponent(this.crop)}` : '';
+        },
+        async loadCrops() {
+          try {
+            const r = await fetch('/api/crops');
+            const d = await r.json();
+            this.crops = d.crops || [];
+            // 选中项校验：本地存的若已失效则回退默认
+            if (!this.crops.find(c => c.id === this.crop)) {
+              this.crop = d.default || (this.crops[0] && this.crops[0].id) || '';
+            }
+          } catch (e) { this.crops = []; }
+        },
+        switchCrop(id) {
+          if (id === this.crop) return;
+          this.crop = id;
+          localStorage.setItem('crop', id);
+          this.reloadCropData();
+        },
+        reloadCropData() {
+          this.stage = null; this.tasks = []; this.alerts = []; this.loadError = '';
+          this.loadToday();
+          this.loadAlerts();
+        },
+        // ---- 地块（我的园子） ----
+        cropName(id) { const c = this.crops.find(x => x.id === id); return c ? c.name : id; },
+        async loadPlots() {
+          try {
+            const r = await fetch('/api/plots');
+            const d = await r.json();
+            this.plots = d.plots || [];
+          } catch (e) { this.plots = []; }
+        },
+        applyActivePlot() {
+          const p = this.activePlot;
+          if (p && p.crop && this.crops.find(c => c.id === p.crop)) {
+            this.crop = p.crop;
+            localStorage.setItem('crop', p.crop);
+          }
+        },
+        openPlots() { this.plotForm = null; this.plotView = true; },
+        closePlots() { this.plotView = false; this.plotForm = null; },
+        newPlot() {
+          this.plotForm = { name: '', crop: this.crop || (this.crops[0] && this.crops[0].id) || 'peach',
+                            variety: '', location_name: '', lat: '', lon: '', area_mu: '' };
+        },
+        editPlot(p) { this.plotForm = Object.assign({ _id: p.id }, p, {
+          lat: p.lat ?? '', lon: p.lon ?? '', area_mu: p.area_mu ?? '' }); },
+        async savePlot() {
+          const f = this.plotForm;
+          if (!f.name.trim()) { this.toast('请填地块名称'); return; }
+          const body = {
+            name: f.name.trim(), crop: f.crop, variety: f.variety || '',
+            location_name: f.location_name || '',
+            lat: f.lat === '' ? null : Number(f.lat),
+            lon: f.lon === '' ? null : Number(f.lon),
+            area_mu: f.area_mu === '' ? null : Number(f.area_mu),
+          };
+          try {
+            const url = f._id ? '/api/plots/' + f._id : '/api/plots';
+            const method = f._id ? 'PUT' : 'POST';
+            const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            if (!r.ok) throw new Error('save ' + r.status);
+            const saved = await r.json();
+            await this.loadPlots();
+            // 新建的第一块地自动设为当前
+            if (!f._id && (this.plots.length === 1 || !this.activePlotId)) this.setActive(saved);
+            this.plotForm = null;
+            this.toast('已保存');
+          } catch (e) { this.toast('保存失败，稍后再试'); }
+        },
+        async removePlot(p) {
+          try {
+            await fetch('/api/plots/' + p.id, { method: 'DELETE' });
+            if (this.activePlotId === p.id) {
+              this.activePlotId = ''; localStorage.removeItem('activePlotId');
+            }
+            await this.loadPlots();
+            this.toast('已删除');
+          } catch (e) { this.toast('删除失败'); }
+        },
+        setActive(p) {
+          this.activePlotId = p.id;
+          localStorage.setItem('activePlotId', p.id);
+          this.applyActivePlot();
+          this.reloadCropData();
+          this.toast('已设为当前园子');
+        },
         async loadToday() {
           try {
-            const r = await fetch('/api/calendar/today');
+            const r = await fetch('/api/calendar/today' + this.cropQS('?'));
             if (!r.ok) throw new Error('bad status ' + r.status);
             const data = await r.json();
             this.region = data.region || this.region;
@@ -434,7 +614,15 @@
           try {
             // 支持 ?scenario=frost|hail|wind|heat|rain 演示不同预警（无天气 key 时）
             const sc = new URLSearchParams(location.search).get('scenario');
-            const url = '/api/alerts' + (sc ? ('?scenario=' + sc) : '');
+            const params = [];
+            if (this.crop) params.push('crop=' + encodeURIComponent(this.crop));
+            if (sc) params.push('scenario=' + sc);
+            // 有当前地块且填了经纬度 → 天气按这块地的位置算
+            const p = this.activePlot;
+            if (p && p.lat != null && p.lon != null) {
+              params.push('lat=' + p.lat, 'lon=' + p.lon);
+            }
+            const url = '/api/alerts' + (params.length ? '?' + params.join('&') : '');
             const r = await fetch(url);
             if (!r.ok) throw new Error('alerts ' + r.status);
             const d = await r.json();
@@ -498,7 +686,7 @@
             const r = await fetch('/api/chat', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ question: text, history }),
+              body: JSON.stringify({ question: text, history, crop: this.crop }),
             });
             if (!r.ok) throw new Error('chat ' + r.status);
             const d = await r.json();
@@ -523,6 +711,7 @@
           try {
             const fd = new FormData();
             fd.append('file', f);
+            if (this.crop) fd.append('crop', this.crop);
             const url = '/api/diagnose' + (this.useMock ? '?mock=1' : '');
             const r = await fetch(url, { method: 'POST', body: fd });
             if (!r.ok) throw new Error('status ' + r.status);

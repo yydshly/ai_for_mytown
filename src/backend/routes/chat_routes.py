@@ -10,7 +10,6 @@ import logging
 from fastapi import APIRouter, Body, HTTPException
 
 from ..services.chat_service import ChatService
-from ..services.knowledge_base import build_kb
 
 log = logging.getLogger("routes.chat")
 
@@ -21,7 +20,6 @@ MAX_HISTORY = 8
 def register(app, ctx) -> None:
     r = APIRouter()
     svc = ChatService(ctx)
-    kb = build_kb(ctx.knowledge_dir)
 
     @r.get("/api/chat/available")
     def available():
@@ -38,6 +36,10 @@ def register(app, ctx) -> None:
             history = history[-MAX_HISTORY:]
         else:
             history = []
-        return await svc.answer(kb, question, history)
+
+        cid = ctx.crops.resolve(payload.get("crop"))
+        kb = ctx.knowledge.kb(cid)
+        bundle = ctx.crops.knowledge(cid)
+        return await svc.answer(kb, bundle, question, history)
 
     app.include_router(r)

@@ -11,7 +11,6 @@ import logging
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
 from ..services.diagnose import diagnose
-from ..services.knowledge_base import build_kb
 
 log = logging.getLogger("routes.diagnose")
 
@@ -20,13 +19,13 @@ MAX_IMAGE_BYTES = 12 * 1024 * 1024  # 12MB
 
 def register(app, ctx) -> None:
     r = APIRouter()
-    kb = build_kb(ctx.knowledge_dir)  # 进程内构建一次
     keep_days = ((ctx.config.get("diagnose") or {}).get("keep_uploaded_images_days")) or 0
 
     @r.post("/api/diagnose")
     async def post_diagnose(
         file: UploadFile = File(...),
         note: str = Form(""),
+        crop: str = Form(""),
         mock: int = Query(0),
     ):
         data = await file.read()
@@ -35,6 +34,10 @@ def register(app, ctx) -> None:
         if len(data) > MAX_IMAGE_BYTES:
             raise HTTPException(413, "图片过大，请压缩后重试")
 
+        cid = ctx.crops.resolve(crop or None)
+        meta = ctx.crops.get(cid)
+        kb = ctx.knowledge.kb(cid)
+
         mime = file.content_type or "image/jpeg"
         result = await diagnose(
             kb=kb,
@@ -42,6 +45,7 @@ def register(app, ctx) -> None:
             image_bytes=data,
             image_mime=mime,
             user_note=note.strip(),
+            crop_name=(meta.name if meta else "果树"),
             force_mock=bool(mock),
         )
 

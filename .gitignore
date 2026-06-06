@@ -9,6 +9,8 @@ logs/
 cache/
 data/vector_index/
 data/uploads/
+data/app.db
+data/*.db
 .claude/
 
 .idea/

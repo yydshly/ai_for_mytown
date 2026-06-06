@@ -1,0 +1,45 @@
+{
+  "_meta": { "crop": "apple", "region": "陕西渭北", "source": "MVP 种子数据，农业措施为主，需农技校对", "version": "0.1.0", "review_status": "pending" },
+  "playbooks": {
+    "frost": {
+      "name": "霜冻", "icon": "🌨️", "severity_default": "severe",
+      "affected_stages": ["bud_swell", "flowering", "young_fruit"],
+      "threat": "渭北晚霜频发，花期、幼果期遇 0℃ 以下低温，花器和幼果受冻，易大幅减产甚至绝收。",
+      "before": ["提前 1-2 天看预报，备好熏烟材料（秸秆、锯末、防霜烟饼）。", "傍晚园内灌水或喷水，利用水结冰放热保温。", "花期可喷防霜剂/芸苔素增强抗冻。"],
+      "during": ["凌晨最低温时（3-6 点）在上风向点火熏烟形成烟幕。", "用风机扰动空气打破逆温层。"],
+      "after": ["冻后观察 3-5 天再处理，不急于疏除。", "受冻轻的加强肥水促恢复，重的疏除死花死果保留有效花。"]
+    },
+    "hail": {
+      "name": "冰雹", "icon": "🧊", "severity_default": "severe",
+      "affected_stages": ["flowering", "young_fruit", "fruit_expansion", "harvest"],
+      "threat": "渭北是冰雹多发带，冰雹砸伤叶果枝造成大量伤口，极易诱发轮纹病、腐烂病，商品果率骤降。",
+      "before": ["有防雹网的及时检查张挂，这是渭北苹果的重点防护。", "冰雹前抢收已成熟可采果实。"],
+      "during": ["人在室内避险，不要在树下或空旷处停留。"],
+      "after": ["雹后尽快喷保护性杀菌剂防伤口感染（药剂咨询农技员）。", "清除落果断枝减少病源。", "受伤重的树加强肥水恢复树势。"]
+    },
+    "wind": {
+      "name": "大风", "icon": "💨", "severity_default": "warning",
+      "affected_stages": ["fruit_expansion", "harvest"],
+      "threat": "果实膨大后枝条负重大，6 级以上大风易折枝、落果、刮伤果面。",
+      "before": ["挂果多的枝条提前撑棍、吊枝、绑缚加固。", "抢收临近成熟果减少落果损失。", "检查防雹网、支架是否牢固。"],
+      "during": ["风大时不上树作业，注意安全。"],
+      "after": ["扶正吹歪的树、绑缚折伤枝并做剪口保护。", "拾除落果。"]
+    },
+    "heat": {
+      "name": "高温日灼", "icon": "🌡️", "severity_default": "warning",
+      "affected_stages": ["fruit_expansion", "harvest"],
+      "threat": "持续 35℃ 以上高温强光，向阳果面易日灼变褐，摘袋后裸露果更敏感。",
+      "before": ["高温前傍晚或清晨灌水降温保湿。", "套袋或留足遮阴叶，摘袋避开高温强光时段、分次进行。", "可叶面喷水或喷防日灼剂。"],
+      "during": ["避开正午高温时段作业和打药。"],
+      "after": ["日灼果及时摘除防腐烂。", "持续关注墒情及时补水。"]
+    },
+    "rain": {
+      "name": "连阴雨", "icon": "🌧️", "severity_default": "warning",
+      "affected_stages": ["flowering", "fruit_expansion", "harvest"],
+      "threat": "连续阴雨高湿，花期影响授粉坐果，膨大成熟期易暴发褐斑病早期落叶、轮纹病烂果。",
+      "before": ["雨前开沟排水，园内不积水。", "雨前喷保护性杀菌剂预防褐斑病、轮纹病（药剂咨询农技员）。", "成熟果抢在雨前采收。"],
+      "during": ["及时清除已发病的烂果病叶带出园外。"],
+      "after": ["雨后排水通风，再补一次杀菌防护。", "扶理倒伏、加固支撑。"]
+    }
+  }
+}

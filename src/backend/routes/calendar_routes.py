@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from ..infra.safeio import read_json
 from ..services.phenology import current_stage, load_stages, neighbors
@@ -9,24 +9,32 @@ from ..services.phenology import current_stage, load_stages, neighbors
 def register(app, ctx) -> None:
     r = APIRouter()
 
+    def _crop_ctx(crop: str | None):
+        cid = ctx.crops.resolve(crop)
+        meta = ctx.crops.get(cid)
+        bundle = ctx.crops.knowledge(cid)
+        return cid, meta, bundle
+
     @r.get("/api/calendar/today")
-    def today():
-        stages = load_stages(ctx.phenology_path)
+    def today(crop: str | None = Query(None)):
+        cid, meta, bundle = _crop_ctx(crop)
+        stages = load_stages(bundle.phenology_path)
         if not stages:
-            raise HTTPException(500, "物候期数据未加载")
+            raise HTTPException(500, f"{cid} 物候期数据未加载")
         today_date = date.today()
         cur = current_stage(stages, today_date)
         if cur is None:
             raise HTTPException(500, f"未匹配到当前物候期：{today_date}")
         prev_s, next_s = neighbors(stages, cur)
 
-        calendar = read_json(ctx.calendar_path) or {}
+        calendar = read_json(bundle.calendar_path) or {}
         tasks = (calendar.get("tasks_by_stage") or {}).get(cur.key) or []
 
         return {
             "date": today_date.isoformat(),
-            "crop": "peach",
-            "region": "陕西关中",
+            "crop": cid,
+            "crop_name": meta.name if meta else cid,
+            "region": meta.region if meta else "",
             "stage": {
                 "key": cur.key,
                 "name": cur.name,
@@ -39,13 +47,15 @@ def register(app, ctx) -> None:
         }
 
     @r.get("/api/calendar/all")
-    def all_stages():
-        stages = load_stages(ctx.phenology_path)
-        calendar = read_json(ctx.calendar_path) or {}
+    def all_stages(crop: str | None = Query(None)):
+        cid, meta, bundle = _crop_ctx(crop)
+        stages = load_stages(bundle.phenology_path)
+        calendar = read_json(bundle.calendar_path) or {}
         tasks_map = calendar.get("tasks_by_stage") or {}
         return {
-            "crop": "peach",
-            "region": "陕西关中",
+            "crop": cid,
+            "crop_name": meta.name if meta else cid,
+            "region": meta.region if meta else "",
             "stages": [
                 {
                     "key": s.key,

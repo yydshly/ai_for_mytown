@@ -96,16 +96,14 @@ class KnowledgeBase:
         self,
         query: str,
         *,
-        crop: str = "peach",
         region: str | None = None,
         topic: str | None = None,   # disease | pest | None
         k: int = 3,
     ) -> list[PestMatch]:
-        """按查询文本检索最相关的病虫害条目。"""
+        """按查询文本检索最相关的病虫害条目。
+        注：KnowledgeBase 已按作物隔离（每个实例只含一种作物的数据），故不再按 crop 过滤。"""
         scored: list[tuple[int, dict]] = []
         for e in self._pests:
-            if e.get("crop") != crop:
-                continue
             if topic and e.get("type") != topic:
                 continue
             if not self._region_ok(e, region):
@@ -116,26 +114,33 @@ class KnowledgeBase:
         scored.sort(key=lambda x: x[0], reverse=True)
         return [self._to_match(s, e) for s, e in scored[:k]]
 
-    def find_mentions(self, text: str, *, crop: str = "peach") -> list[PestMatch]:
+    def find_mentions(self, text: str) -> list[PestMatch]:
         """在一段文本（如 AI 识别结果）中查找出现的已知病虫名/别名，按名称命中。
         用于把 vision 的自由文本对齐到结构化知识条目。"""
         hits: list[PestMatch] = []
         for e in self._pests:
-            if e.get("crop") != crop:
-                continue
             names = [e.get("name", "")] + (e.get("aliases") or [])
             if any(n and n in text for n in names):
                 hits.append(self._to_match(99, e))
         return hits
 
-    def get_by_name(self, name: str, *, crop: str = "peach") -> PestMatch | None:
+    def get_by_name(self, name: str) -> PestMatch | None:
         for e in self._pests:
-            if e.get("crop") != crop:
-                continue
             names = [e.get("name", "")] + (e.get("aliases") or [])
             if name in names:
                 return self._to_match(100, e)
         return None
+
+    def all_names(self) -> list[str]:
+        """该作物所有病虫的主名，用于动态拼装 vision 提示词。"""
+        return [e.get("name", "") for e in self._pests if e.get("name")]
+
+    def sample_disease_name(self) -> str:
+        """取第一个病害名，给无 key 时的 mock 诊断用（保证按作物正确）。"""
+        for e in self._pests:
+            if e.get("type") == "disease" and e.get("name"):
+                return e["name"]
+        return self._pests[0].get("name", "") if self._pests else ""
 
     def _to_match(self, score: int, e: dict) -> PestMatch:
         md = e.get("metadata") or {}
@@ -195,10 +200,3 @@ class KnowledgeBase:
             items=[],
             note="知识库暂无该病虫的用药信息，建议咨询当地农技员。",
         )
-
-
-def build_kb(knowledge_dir: Path) -> KnowledgeBase:
-    return KnowledgeBase(
-        pests_path=knowledge_dir / "peach_pests.jsonl",
-        pesticide_path=knowledge_dir / "pesticide_kb.jsonl",
-    )

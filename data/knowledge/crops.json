@@ -1,0 +1,8 @@
+{
+  "_说明": "作物注册表。新增作物 = 在此登记 + 建 data/knowledge/<id>/ 文件夹（phenology/calendar/pests/pesticide/playbooks）。各作物共用同一套物候期 key（dormancy/bud_swell/flowering/young_fruit/fruit_expansion/harvest/post_harvest/leaf_fall），只是日期与内容不同。",
+  "default": "peach",
+  "crops": [
+    { "id": "peach", "name": "桃", "region": "陕西关中", "enabled": true },
+    { "id": "apple", "name": "苹果", "region": "陕西（渭北/陕北旱塬）", "enabled": true }
+  ]
+}

@@ -14,6 +14,7 @@ from pathlib import Path
 from ...ai.base import Capability, Message, ProviderConfigError
 from ...ai.factory import make_provider
 from ...ai.tasks import chat_with_context
+from ..domain.crops import CropKnowledge
 from ..infra.safeio import read_json
 from .knowledge_base import KnowledgeBase
 from .phenology import current_stage, load_stages
@@ -48,16 +49,16 @@ class ChatService:
     def available(self) -> bool:
         return self._get_provider() is not None
 
-    def _context(self, kb: KnowledgeBase, question: str) -> tuple[str, list[str]]:
-        """组装 RAG 上下文：当前物候期名 + 相关病虫条目 + 本周农事。"""
+    def _context(self, kb: KnowledgeBase, bundle: CropKnowledge, question: str) -> tuple[str, list[str]]:
+        """组装 RAG 上下文：当前物候期名 + 相关病虫条目 + 本周农事（按作物）。"""
         snippets: list[str] = []
 
         # 当前物候期 + 本周农事
         stage_name = ""
-        cur = current_stage(load_stages(self.ctx.phenology_path), date.today())
+        cur = current_stage(load_stages(bundle.phenology_path), date.today())
         if cur:
             stage_name = cur.name
-            calendar = read_json(self.ctx.calendar_path) or {}
+            calendar = read_json(bundle.calendar_path) or {}
             tasks = (calendar.get("tasks_by_stage") or {}).get(cur.key) or []
             if tasks:
                 lines = [f"{t.get('title','')}：{t.get('detail','')}" for t in tasks[:4]]
@@ -70,7 +71,10 @@ class ChatService:
             )
         return stage_name, snippets
 
-    async def answer(self, kb: KnowledgeBase, question: str, history: list[dict] | None = None) -> dict:
+    async def answer(
+        self, kb: KnowledgeBase, bundle: CropKnowledge,
+        question: str, history: list[dict] | None = None,
+    ) -> dict:
         question = (question or "").strip()
         if not question:
             return {"mode": "error", "answer": "没听清，请再说一遍。"}
@@ -79,7 +83,7 @@ class ChatService:
         if provider is None:
             return {"mode": "unconfigured", "answer": "AI 暂未配置，问题我先记下了，建议咨询农技员。"}
 
-        stage_name, snippets = self._context(kb, question)
+        stage_name, snippets = self._context(kb, bundle, question)
         hist_msgs = [
             Message(role=h.get("role", "user"), content=h.get("content", ""))
             for h in (history or [])

@@ -53,12 +53,21 @@ class WeatherClient:
     def _key_ready(self) -> bool:
         return bool(self.api_key) and not self.api_key.startswith("PASTE_")
 
-    async def get(self, scenario: str | None = None) -> WeatherView:
+    async def get(
+        self,
+        scenario: str | None = None,
+        *,
+        lat: float | None = None,
+        lon: float | None = None,
+    ) -> WeatherView:
         # 显式指定 scenario，或没有可用 key → mock
         if scenario or not self._key_ready():
             return self._mock(scenario or "none")
+        # 地块经纬度优先于配置默认值
+        q_lat = lat if lat is not None else self.lat
+        q_lon = lon if lon is not None else self.lon
         try:
-            return await self._qweather()
+            return await self._qweather(q_lat, q_lon)
         except Exception as e:
             log.warning("qweather 拉取失败，回退 mock: %s", e)
             return self._mock("none")
@@ -76,10 +85,10 @@ class WeatherClient:
             summary=s["summary"],
         )
 
-    async def _qweather(self) -> WeatherView:
+    async def _qweather(self, lat: float, lon: float) -> WeatherView:
         """和风天气 3 天预报。免费档：devapi.qweather.com。"""
         url = "https://devapi.qweather.com/v7/weather/3d"
-        params = {"location": f"{self.lon:.2f},{self.lat:.2f}", "key": self.api_key}
+        params = {"location": f"{lon:.2f},{lat:.2f}", "key": self.api_key}
         async with httpx.AsyncClient(timeout=20) as cli:
             r = await cli.get(url, params=params)
             r.raise_for_status()

@@ -16,14 +16,14 @@ log = logging.getLogger("services.alerts")
 _SEVERITY_RANK = {"severe": 3, "warning": 2, "info": 1}
 
 
-def _playbooks(knowledge_dir: Path) -> dict:
-    data = read_json(knowledge_dir / "disaster_playbooks.json") or {}
+def _playbooks(playbooks_path: Path) -> dict:
+    data = read_json(playbooks_path) or {}
     return data.get("playbooks") or {}
 
 
-def evaluate_alerts(weather: WeatherView, stage_key: str, knowledge_dir: Path) -> list[dict]:
-    """返回当前生效的预警列表，按严重度降序。"""
-    pb = _playbooks(knowledge_dir)
+def evaluate_alerts(weather: WeatherView, stage_key: str, playbooks_path: Path) -> list[dict]:
+    """返回当前生效的预警列表，按严重度降序。playbooks_path 由作物知识包提供。"""
+    pb = _playbooks(playbooks_path)
     alerts: list[dict] = []
 
     def add(kind: str, severity: str, reason: str):

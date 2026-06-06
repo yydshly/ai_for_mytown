@@ -24,7 +24,9 @@ from src.backend.routes import (  # noqa: E402
     alert_routes,
     calendar_routes,
     chat_routes,
+    crop_routes,
     diagnose_routes,
+    plot_routes,
     runtime_routes,
     static_routes,
     tts_routes,
@@ -47,6 +49,8 @@ def create_app() -> tuple[FastAPI, "object"]:
     )
 
     runtime_routes.register(app, ctx)
+    crop_routes.register(app, ctx)
+    plot_routes.register(app, ctx)
     calendar_routes.register(app, ctx)
     diagnose_routes.register(app, ctx)
     alert_routes.register(app, ctx)

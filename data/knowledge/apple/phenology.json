@@ -1,0 +1,19 @@
+{
+  "_meta": {
+    "crop": "apple",
+    "region": "陕西渭北旱塬（洛川/白水/富县一带，以富士为主）",
+    "varieties_default": ["晚熟富士"],
+    "source": "MVP 种子数据，需农技资料二次校对",
+    "version": "0.1.0"
+  },
+  "stages": [
+    { "key": "dormancy",        "name": "休眠期",     "month_day_start": "12-01", "month_day_end": "02-28", "summary": "落叶后至萌芽前。冬剪、清园、刮治腐烂病、涂白、施基肥。" },
+    { "key": "bud_swell",       "name": "萌芽期",     "month_day_start": "03-01", "month_day_end": "04-05", "summary": "芽体膨大露绿。喷石硫合剂清园、防红蜘蛛越冬、防晚霜。" },
+    { "key": "flowering",       "name": "花期",       "month_day_start": "04-06", "month_day_end": "04-30", "summary": "初花至盛花。最怕晚霜冻；疏花、放蜂授粉、花期慎用药。" },
+    { "key": "young_fruit",     "name": "幼果期",     "month_day_start": "05-01", "month_day_end": "06-15", "summary": "落花后至幼果膨大。疏果定果、套袋准备、防绵蚜与食心虫。" },
+    { "key": "fruit_expansion", "name": "果实膨大期", "month_day_start": "06-16", "month_day_end": "08-31", "summary": "果实快速膨大。套袋、追钾肥、防褐斑病早期落叶、防冰雹日灼。" },
+    { "key": "harvest",         "name": "成熟采收期", "month_day_start": "09-01", "month_day_end": "10-31", "summary": "着色成熟，富士多在 10 月下旬采。摘袋上色、增糖、防食心虫钻果。" },
+    { "key": "post_harvest",    "name": "采后管理",   "month_day_start": "11-01", "month_day_end": "11-20", "summary": "采果后施秋季基肥（最关键一次肥），防后期叶病、复壮树势。" },
+    { "key": "leaf_fall",       "name": "落叶期",     "month_day_start": "11-21", "month_day_end": "11-30", "summary": "清扫落叶带出园外、灌冬水、准备冬剪。" }
+  ]
+}

@@ -8,7 +8,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .domain.crops import CropRegistry
+from .infra.db import Database
 from .infra.safeio import read_json
+from .services.knowledge_manager import KnowledgeManager
 
 
 @dataclass
@@ -19,21 +22,23 @@ class AppContext:
     # 路径
     data_dir: Path = field(init=False)
     knowledge_dir: Path = field(init=False)
-    phenology_path: Path = field(init=False)
-    calendar_path: Path = field(init=False)
     log_dir: Path = field(init=False)
 
-    # 占位 — Phase 2+ 才装配
-    ai_text_provider: Any = None
-    ai_vision_provider: Any = None
-    ai_tts_provider: Any = None
+    # 多作物：注册表 + 按作物知识管理（路由通过 ?crop= 解析）
+    crops: CropRegistry = field(init=False)
+    knowledge: KnowledgeManager = field(init=False)
+
+    # 持久化（地块、农事日志等）
+    db: Database = field(init=False)
 
     def __post_init__(self):
         self.data_dir = self.project_root / "data"
         self.knowledge_dir = self.data_dir / "knowledge"
-        self.phenology_path = self.knowledge_dir / "peach_phenology.json"
-        self.calendar_path = self.knowledge_dir / "peach_calendar.json"
         self.log_dir = self.project_root / "logs"
+        self.crops = CropRegistry(self.knowledge_dir)
+        self.knowledge = KnowledgeManager(self.crops)
+        self.db = Database(self.data_dir / "app.db")
+        self.db.init_schema()
 
 
 def build_context(project_root: Path) -> AppContext:

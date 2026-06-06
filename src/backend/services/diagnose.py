@@ -24,23 +24,18 @@ DISCLAIMER = (
     "农技部门指导为准；涉及重大决策请咨询专业农技员。"
 )
 
-VISION_PROMPT = (
-    "你是陕西本地桃树农技顾问。请仔细看这张桃树照片（可能是叶、果、枝干），"
-    "判断最可能的 1-2 种病虫害。\n"
-    "只用中文，按以下格式简洁回答：\n"
-    "最可能：<病虫名称>（可能性：高/中/低）\n"
-    "依据：<你从照片看到的关键特征，一句话>\n"
-    "备选：<另一个可能的病虫名称，或写'无'>\n"
-    "如果照片太糊或信息不足以判断，请直接写：'照片信息不足'，并说明需要补拍哪个部位。\n"
-    "已知本地常见：桃缩叶病、桃褐腐病、桃细菌性穿孔病、桃流胶病、桃蚜、桃小食心虫。"
-    "请优先在这些里判断，但不要编造农药名。"
-)
-
-MOCK_IDENTIFICATION = (
-    "最可能：桃褐腐病（可能性：中）\n"
-    "依据：果面有灰褐色轮纹状霉层，近成熟期阴雨后多发。\n"
-    "备选：无"
-)
+def build_vision_prompt(crop_name: str, known_names: list[str]) -> str:
+    known = "、".join(known_names) if known_names else "（暂无知识库条目）"
+    return (
+        f"你是陕西本地{crop_name}农技顾问。请仔细看这张{crop_name}照片（可能是叶、果、枝干），"
+        "判断最可能的 1-2 种病虫害。\n"
+        "只用中文，按以下格式简洁回答：\n"
+        "最可能：<病虫名称>（可能性：高/中/低）\n"
+        "依据：<你从照片看到的关键特征，一句话>\n"
+        "备选：<另一个可能的病虫名称，或写'无'>\n"
+        "如果照片太糊或信息不足以判断，请直接写：'照片信息不足'，并说明需要补拍哪个部位。\n"
+        f"已知本地常见：{known}。请优先在这些里判断，但不要编造农药名。"
+    )
 
 
 def _build_vision_provider(config: dict) -> Any | None:
@@ -87,22 +82,24 @@ async def diagnose(
     image_bytes: bytes,
     image_mime: str = "image/jpeg",
     user_note: str = "",
+    crop_name: str = "果树",
     force_mock: bool = False,
 ) -> dict:
-    """执行一次拍照诊断，返回结构化结果。"""
+    """执行一次拍照诊断，返回结构化结果。prompt 与 mock 均按作物动态生成。"""
     mode = "ai"
     identification = ""
 
     if force_mock:
         mode = "mock"
-        identification = MOCK_IDENTIFICATION
+        sample = kb.sample_disease_name() or "（示例病害）"
+        identification = f"最可能：{sample}（可能性：中）\n依据：mock 模式示例。\n备选：无"
     else:
         provider = _build_vision_provider(config)
         if provider is None:
             mode = "unconfigured"
         else:
             try:
-                prompt = VISION_PROMPT
+                prompt = build_vision_prompt(crop_name, kb.all_names())
                 if user_note:
                     prompt += f"\n用户补充：{user_note}"
                 identification = await provider.vision(image_bytes, prompt, mime=image_mime)

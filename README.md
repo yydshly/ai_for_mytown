@@ -79,6 +79,21 @@ Phase 3c（语音问答）✅
 > ⚠️ 手机上**语音输入(ASR)和"添加到主屏幕"需要 HTTPS**，纯局域网 http 不行。
 > 用带 https 的内网穿透（cpolar 等）一并解决可达性与安全环境。
 
+Phase 5（持久化 + 地块档案 D1）✅
+- **SQLite 持久化层**（ADR-002）：`infra/db.py`（连接/schema/迁移），数据在 `data/app.db`（gitignore）
+- **新增 `repositories/` 数据访问层**：SQL 隔离在此，routes/services 不直接写 SQL
+- `domain/plot.py` 地块模型 + `repositories/plot_repository.py` CRUD
+- `routes/plot_routes.py`：`GET/POST/PUT/DELETE /api/plots`，crop 经注册表校验
+- 前端"我的园子"：增删改地块、设为当前；**当前地块驱动首页作物**，经纬度喂给天气预警
+- 验证：CRUD + 重启持久化 + 非法作物拒绝 + 前端"设为当前→首页切作物"全通
+
+Phase 4（多作物架构）✅
+- 知识按作物分目录 `data/knowledge/<crop>/`，`crops.json` 注册表
+- `CropRegistry`（domain）+ `KnowledgeManager`（按作物缓存）；所有接口支持 `?crop=`
+- 已加**苹果**验证可扩展：加作物 = 丢数据文件夹 + 注册一行，零业务代码改动
+- 前端顶部作物切换（桃/苹果），选择持久化；详见 docs/adr.md ADR-011
+- 扩展梨/樱桃：建 `data/knowledge/<id>/` + 在 crops.json 登记即可
+
 ### 下一步（真机验证后按需扩展）
 - [ ] 跑 docs/deploy-mobile.md：穿透部署 → 本人扮父母走一遍 → 记录卡点
 - [ ] 主动推送（微信 Server酱）：预警主动找父母（F1，老人产品命脉）
@@ -93,20 +108,24 @@ Phase 3c（语音问答）✅
 
 ```
 server.py                      入口装配
-config/
-  config.example.json          配置模板（提交仓库）
-  config.json                  真实配置（.gitignore）
-data/knowledge/
-  peach_phenology.json         物候期表
-  peach_calendar.json          按阶段的农事任务
+config/                        config.example.json（提交）/ config.json（gitignore）
+data/
+  knowledge/
+    crops.json                 作物注册表
+    <crop>/                    每作物：phenology/calendar/pests/pesticide/playbooks
+  app.db                       SQLite（地块等，gitignore）
 src/ai/                        provider 抽象 + 任务函数
 src/backend/
-  app_context.py               AppContext 装配
-  routes/                      HTTP 路由
-  services/                    业务逻辑（phenology 等）
-  infra/                       日志、安全 IO
-  domain/                      元数据
+  app_context.py               AppContext 装配（crops/knowledge/db）
+  routes/                      HTTP 薄层（按职责拆分，每个 register(app, ctx)）
+  services/                    编排（diagnose/chat/tts/weather/alerts/knowledge_manager）
+  repositories/                数据访问层（SQL 隔离，如 plot_repository）
+  domain/                      纯模型与规则（crops/plot/app_metadata）
+  infra/                       基础设施（db/logging/safeio）
 ```
+
+> 分层原则：routes(HTTP) → services(编排) → repositories(数据) → infra；domain 为无 IO 的纯模型。
+> 新作物 = 加 `data/knowledge/<id>/` + crops.json 一行；新实体 = domain + repository + routes 各一。
 
 ---
 
