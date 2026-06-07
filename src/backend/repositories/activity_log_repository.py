@@ -45,9 +45,16 @@ class ActivityLogRepository:
             )
         return log
 
-    def delete(self, log_id: str) -> bool:
+    def delete(self, log_id: str, owner_id: str | None = None) -> bool:
         with self.db.connect() as conn:
-            cur = conn.execute("DELETE FROM activity_logs WHERE id = ?", (log_id,))
+            if owner_id is None:
+                cur = conn.execute("DELETE FROM activity_logs WHERE id = ?", (log_id,))
+            else:
+                cur = conn.execute(
+                    "DELETE FROM activity_logs WHERE id = ? AND plot_id IN "
+                    "(SELECT id FROM plots WHERE owner_id = ?)",
+                    (log_id, owner_id),
+                )
             return cur.rowcount > 0
 
     def latest_by_category(self, plot_id: str, category: str) -> ActivityLog | None:

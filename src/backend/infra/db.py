@@ -19,6 +19,7 @@ _MIGRATIONS: list[str] = [
     """
     CREATE TABLE IF NOT EXISTS plots (
         id            TEXT PRIMARY KEY,
+        owner_id      TEXT DEFAULT '',
         name          TEXT NOT NULL,
         crop          TEXT NOT NULL,
         variety       TEXT DEFAULT '',
@@ -56,6 +57,7 @@ _MIGRATIONS: list[str] = [
     """
     CREATE TABLE IF NOT EXISTS contacts (
         id         TEXT PRIMARY KEY,
+        owner_id   TEXT DEFAULT '',
         name       TEXT NOT NULL,
         role       TEXT DEFAULT '其他',
         phone      TEXT NOT NULL,
@@ -119,3 +121,9 @@ class Database:
         with self.connect() as conn:
             for stmt in _MIGRATIONS:
                 conn.executescript(stmt)
+            # 向后兼容：已存在的旧库补 owner_id 列（新库 CREATE 已含，ALTER 会报重复→忽略）
+            for table in ("plots", "contacts"):
+                try:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN owner_id TEXT DEFAULT ''")
+                except Exception:
+                    pass

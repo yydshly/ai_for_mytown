@@ -7,24 +7,39 @@ from src.backend.repositories.notification_repository import NotificationReposit
 from src.backend.repositories.plot_repository import PlotRepository
 
 
+U = "u1"   # 测试用 owner_id
+
+
 # ---- 地块 ----
 
 def test_plot_crud(temp_db):
     repo = PlotRepository(temp_db)
-    p = repo.create({"name": "测试园", "crop": "apple", "lat": 35.7, "lon": 109.4, "area_mu": 3.5})
+    p = repo.create({"name": "测试园", "crop": "apple", "lat": 35.7, "lon": 109.4, "area_mu": 3.5}, U)
     assert p.id and p.crop == "apple"
 
-    assert len(repo.list()) == 1
-    assert repo.get(p.id).name == "测试园"
+    assert len(repo.list(U)) == 1
+    assert repo.get(p.id, U).name == "测试园"
 
-    updated = repo.update(p.id, {"name": "测试园(改)", "area_mu": 4.2})
+    updated = repo.update(p.id, {"name": "测试园(改)", "area_mu": 4.2}, U)
     assert updated.name == "测试园(改)" and updated.area_mu == 4.2
     assert updated.created_at == p.created_at        # 创建时间保留
     assert updated.updated_at >= p.updated_at        # 更新时间不回退（秒级，可能相等）
 
-    assert repo.delete(p.id) is True
-    assert repo.get(p.id) is None
-    assert repo.delete("nope") is False
+    assert repo.delete(p.id, U) is True
+    assert repo.get(p.id, U) is None
+    assert repo.delete("nope", U) is False
+
+
+def test_plot_isolation(temp_db):
+    # 多用户隔离：B 看不到/删不掉 A 的地块
+    repo = PlotRepository(temp_db)
+    a = repo.create({"name": "A的园", "crop": "apple"}, "userA")
+    repo.create({"name": "B的园", "crop": "peach"}, "userB")
+    assert [p.name for p in repo.list("userA")] == ["A的园"]
+    assert repo.get(a.id, "userB") is None        # B 看不到 A 的地块
+    assert repo.delete(a.id, "userB") is False     # B 删不掉 A 的地块
+    assert repo.get(a.id, "userA") is not None     # A 仍在
+    assert len(repo.list_all()) == 2               # 系统视角能看全部
 
 
 # ---- 农事日志 + 级联 ----
@@ -32,7 +47,7 @@ def test_plot_crud(temp_db):
 def test_activity_log_order_and_cascade(temp_db):
     plots = PlotRepository(temp_db)
     logs = ActivityLogRepository(temp_db)
-    p = plots.create({"name": "园", "crop": "peach"})
+    p = plots.create({"name": "园", "crop": "peach"}, U)
 
     logs.create(p.id, {"date": "2026-06-05", "category": "打药", "title": "防褐腐"})
     logs.create(p.id, {"date": "2026-06-06", "category": "疏花疏果", "title": "疏果"})
@@ -42,7 +57,7 @@ def test_activity_log_order_and_cascade(temp_db):
     assert logs.latest_by_category(p.id, "打药").title == "防褐腐"
 
     # 删除地块 → 日志级联删除（FK ON DELETE CASCADE）
-    plots.delete(p.id)
+    plots.delete(p.id, U)
     assert logs.list_by_plot(p.id) == []
 
 
@@ -64,13 +79,14 @@ def test_notification_dedup(temp_db):
 
 def test_contact_crud(temp_db):
     repo = ContactRepository(temp_db)
-    c = repo.create({"name": "张技术员", "phone": "13800001111", "role": "农技员", "note": "管苹果"})
+    c = repo.create({"name": "张技术员", "phone": "13800001111", "role": "农技员", "note": "管苹果"}, U)
     assert c.id and c.role == "农技员"
-    assert len(repo.list()) == 1
-    updated = repo.update(c.id, {"phone": "13900002222"})
+    assert len(repo.list(U)) == 1
+    assert repo.get(c.id, "other") is None    # 他人看不到
+    updated = repo.update(c.id, {"phone": "13900002222"}, U)
     assert updated.phone == "13900002222" and updated.name == "张技术员"
-    assert repo.delete(c.id) is True
-    assert repo.get(c.id) is None
+    assert repo.delete(c.id, U) is True
+    assert repo.get(c.id, U) is None
 
 
 # ---- 账本 ----
@@ -78,7 +94,7 @@ def test_contact_crud(temp_db):
 def test_ledger_summary_and_cascade(temp_db):
     plots = PlotRepository(temp_db)
     ledger = LedgerRepository(temp_db)
-    p = plots.create({"name": "园", "crop": "apple"})
+    p = plots.create({"name": "园", "crop": "apple"}, U)
 
     ledger.create(p.id, {"date": "2026-03-01", "kind": "expense", "category": "化肥", "amount": 800})
     ledger.create(p.id, {"date": "2026-06-01", "kind": "expense", "category": "农药", "amount": 200})
@@ -91,5 +107,5 @@ def test_ledger_summary_and_cascade(temp_db):
 
     assert len(ledger.list_by_plot(p.id)) == 3
     # 删除地块 → 账本级联删除
-    plots.delete(p.id)
+    plots.delete(p.id, U)
     assert ledger.list_by_plot(p.id) == []

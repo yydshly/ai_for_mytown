@@ -9,8 +9,9 @@ POST /api/diagnose  multipart：file=图片，可选 note=文字补充
 import logging
 from datetime import date as _date
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 
+from ..infra.auth_dep import make_current_user
 from ..repositories.activity_log_repository import ActivityLogRepository
 from ..repositories.plot_repository import PlotRepository
 from ..services.diagnose import diagnose
@@ -32,6 +33,7 @@ def register(app, ctx) -> None:
     keep_days = ((ctx.config.get("diagnose") or {}).get("keep_uploaded_images_days")) or 0
     plots = PlotRepository(ctx.db)
     logs = ActivityLogRepository(ctx.db)
+    optional_user = make_current_user(ctx, required=False)
 
     @r.post("/api/diagnose")
     async def post_diagnose(
@@ -40,6 +42,7 @@ def register(app, ctx) -> None:
         crop: str = Form(""),
         plot_id: str = Form(""),
         mock: int = Query(0),
+        user=Depends(optional_user),
     ):
         data = await file.read()
         if not data:
@@ -62,8 +65,8 @@ def register(app, ctx) -> None:
             force_mock=bool(mock),
         )
 
-        # 安全上下文：当前地块距上次打药天数（防重复/超量用药）
-        if plot_id and plots.get(plot_id) is not None:
+        # 安全上下文：当前地块距上次打药天数（防重复/超量用药）。仅当登录且拥有该地块。
+        if plot_id and user and plots.get(plot_id, user.id) is not None:
             last = logs.latest_by_category(plot_id, "打药")
             if last:
                 result["plot_context"] = {

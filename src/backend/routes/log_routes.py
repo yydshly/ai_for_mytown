@@ -8,9 +8,10 @@ GET    /api/log-categories         返回可选类别（前端下拉）
 import logging
 from datetime import date as _date
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from ..domain.activity_log import CATEGORIES
+from ..infra.auth_dep import make_current_user
 from ..repositories.activity_log_repository import ActivityLogRepository
 from ..repositories.plot_repository import PlotRepository
 
@@ -28,20 +29,21 @@ def register(app, ctx) -> None:
     r = APIRouter()
     repo = ActivityLogRepository(ctx.db)
     plots = PlotRepository(ctx.db)
+    current_user = make_current_user(ctx)
 
     @r.get("/api/log-categories")
     def categories():
         return {"categories": CATEGORIES}
 
     @r.get("/api/plots/{plot_id}/logs")
-    def list_logs(plot_id: str):
-        if plots.get(plot_id) is None:
+    def list_logs(plot_id: str, user=Depends(current_user)):
+        if plots.get(plot_id, user.id) is None:
             raise HTTPException(404, "地块不存在")
         return {"logs": [x.to_dict() for x in repo.list_by_plot(plot_id)]}
 
     @r.post("/api/plots/{plot_id}/logs")
-    def create_log(plot_id: str, payload: dict = Body(...)):
-        if plots.get(plot_id) is None:
+    def create_log(plot_id: str, payload: dict = Body(...), user=Depends(current_user)):
+        if plots.get(plot_id, user.id) is None:
             raise HTTPException(404, "地块不存在")
         title = (payload.get("title") or "").strip()
         category = (payload.get("category") or "").strip()
@@ -58,15 +60,15 @@ def register(app, ctx) -> None:
         return repo.create(plot_id, data).to_dict()
 
     @r.delete("/api/logs/{log_id}")
-    def delete_log(log_id: str):
-        if not repo.delete(log_id):
+    def delete_log(log_id: str, user=Depends(current_user)):
+        if not repo.delete(log_id, user.id):
             raise HTTPException(404, "记录不存在")
         return {"ok": True}
 
     @r.get("/api/plots/{plot_id}/summary")
-    def plot_summary(plot_id: str):
+    def plot_summary(plot_id: str, user=Depends(current_user)):
         """地块速览：最近一次打药 + 距今天数（用于安全间隔期/复盘提示）。"""
-        if plots.get(plot_id) is None:
+        if plots.get(plot_id, user.id) is None:
             raise HTTPException(404, "地块不存在")
         last_spray = repo.latest_by_category(plot_id, "打药")
         all_logs = repo.list_by_plot(plot_id, limit=1000)

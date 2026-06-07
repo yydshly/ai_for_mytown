@@ -48,9 +48,16 @@ class LedgerRepository:
             )
         return e
 
-    def delete(self, entry_id: str) -> bool:
+    def delete(self, entry_id: str, owner_id: str | None = None) -> bool:
         with self.db.connect() as conn:
-            cur = conn.execute("DELETE FROM ledger_entries WHERE id = ?", (entry_id,))
+            if owner_id is None:
+                cur = conn.execute("DELETE FROM ledger_entries WHERE id = ?", (entry_id,))
+            else:
+                cur = conn.execute(
+                    "DELETE FROM ledger_entries WHERE id = ? AND plot_id IN "
+                    "(SELECT id FROM plots WHERE owner_id = ?)",
+                    (entry_id, owner_id),
+                )
             return cur.rowcount > 0
 
     def summary(self, plot_id: str, year: str | None = None) -> dict:

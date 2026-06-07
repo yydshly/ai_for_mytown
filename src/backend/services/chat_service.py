@@ -73,9 +73,9 @@ class ChatService:
             )
         return stage_name, snippets
 
-    def _plot_snippet(self, plot_id: str) -> str:
-        """当前地块的最近农事，喂给问答让回答更贴这块地。"""
-        plot = PlotRepository(self.ctx.db).get(plot_id)
+    def _plot_snippet(self, plot_id: str, owner_id: str | None) -> str:
+        """当前地块的最近农事，喂给问答让回答更贴这块地。仅当该地块属于当前用户。"""
+        plot = PlotRepository(self.ctx.db).get(plot_id, owner_id)
         if plot is None:
             return ""
         parts = [f"当前地块：{plot.name}"]
@@ -90,7 +90,7 @@ class ChatService:
     async def answer(
         self, kb: KnowledgeBase, bundle: CropKnowledge,
         question: str, history: list[dict] | None = None,
-        plot_id: str | None = None,
+        plot_id: str | None = None, owner_id: str | None = None,
     ) -> dict:
         question = (question or "").strip()
         if not question:
@@ -103,7 +103,7 @@ class ChatService:
         stage_name, snippets = self._context(kb, bundle, question)
         # 当前地块的最近农事，让回答更贴这块地
         if plot_id:
-            ps = self._plot_snippet(plot_id)
+            ps = self._plot_snippet(plot_id, owner_id)
             if ps:
                 snippets.insert(0, ps)
         hist_msgs = [

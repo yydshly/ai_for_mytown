@@ -79,6 +79,13 @@ Phase 3c（语音问答）✅
 > ⚠️ 手机上**语音输入(ASR)和"添加到主屏幕"需要 HTTPS**，纯局域网 http 不行。
 > 用带 https 的内网穿透（cpolar 等）一并解决可达性与安全环境。
 
+Phase 16-17（多用户 + 数据隔离 · 产品化地基）✅
+- **身份层**：users/sessions 表，pbkdf2 加盐哈希 + token 会话；register/login/me/logout；身份与业务解耦（日后可插微信登录）
+- **数据隔离**：plots/contacts 加 owner_id，仓储全部按 owner 过滤；日志/账本通过地块归属继承；删除走 owner 校验子查询
+- **鉴权**：infra/auth_dep 依赖；plots/logs/账本/contacts 需登录，越权返回 404；诊断/问答可匿名，地块上下文仅在登录且拥有时注入；定时推送走 list_all（系统视角）
+- **前端**：全屏登录/注册门 + fetch 自动带 token + 退出登录；"我"显示当前账号
+- 验证：匿名→401、A 的地块对 B 不可见(404)、跨用户隔离单测；38 测试通过
+
 Phase 12（"我"标签页 + 通讯录 F4）✅
 - 联系人实体：domain/contact + repositories/contact_repository + routes/contact_routes（CRUD）
 - "我"标签：**通讯录一键拨号**（tel: 链接，农技员/子女/邻居）—— 老人无障碍兜底（AI 答不出→直接打电话）

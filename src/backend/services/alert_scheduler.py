@@ -33,7 +33,7 @@ async def run_alert_check(ctx, *, scenario: str | None = None, force: bool = Fal
     notif_repo = NotificationRepository(ctx.db)
     today = date.today().isoformat()
 
-    plots = plots_repo.list()
+    plots = plots_repo.list_all()
     results: list[dict] = []
 
     for plot in plots:

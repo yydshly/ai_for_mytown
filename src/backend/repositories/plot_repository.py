@@ -1,4 +1,4 @@
-"""地块数据访问层。SQL 仅在此出现，routes/services 不直接写 SQL。"""
+"""地块数据访问层。SQL 仅在此出现，并按 owner_id 做多用户隔离。"""
 from __future__ import annotations
 
 import uuid
@@ -20,21 +20,31 @@ class PlotRepository:
     def __init__(self, db: Database):
         self.db = db
 
-    def list(self) -> list[Plot]:
+    def list(self, owner_id: str) -> list[Plot]:
         with self.db.connect() as conn:
             rows = conn.execute(
-                f"SELECT {_COLUMNS} FROM plots ORDER BY created_at"
+                f"SELECT {_COLUMNS} FROM plots WHERE owner_id = ? ORDER BY created_at",
+                (owner_id,),
             ).fetchall()
         return [Plot.from_row(r) for r in rows]
 
-    def get(self, plot_id: str) -> Plot | None:
+    def list_all(self) -> list[Plot]:
+        """跨用户全部地块（仅供系统任务用，如定时预警推送）。"""
         with self.db.connect() as conn:
-            row = conn.execute(
-                f"SELECT {_COLUMNS} FROM plots WHERE id = ?", (plot_id,)
-            ).fetchone()
+            rows = conn.execute(f"SELECT {_COLUMNS} FROM plots ORDER BY created_at").fetchall()
+        return [Plot.from_row(r) for r in rows]
+
+    def get(self, plot_id: str, owner_id: str | None = None) -> Plot | None:
+        q = f"SELECT {_COLUMNS} FROM plots WHERE id = ?"
+        params: list = [plot_id]
+        if owner_id is not None:
+            q += " AND owner_id = ?"
+            params.append(owner_id)
+        with self.db.connect() as conn:
+            row = conn.execute(q, params).fetchone()
         return Plot.from_row(row) if row else None
 
-    def create(self, data: dict) -> Plot:
+    def create(self, data: dict, owner_id: str) -> Plot:
         now = _now()
         plot = Plot(
             id=uuid.uuid4().hex[:12],
@@ -49,19 +59,20 @@ class PlotRepository:
             created_at=now,
             updated_at=now,
         )
+        row = plot.to_dict()
+        row["owner_id"] = owner_id
         with self.db.connect() as conn:
             conn.execute(
-                f"INSERT INTO plots ({_COLUMNS}) VALUES "
-                "(:id,:name,:crop,:variety,:lat,:lon,:location_name,:area_mu,:notes,:created_at,:updated_at)",
-                plot.to_dict(),
+                f"INSERT INTO plots (id, owner_id, {_COLUMNS.replace('id, ', '')}) VALUES "
+                "(:id,:owner_id,:name,:crop,:variety,:lat,:lon,:location_name,:area_mu,:notes,:created_at,:updated_at)",
+                row,
             )
         return plot
 
-    def update(self, plot_id: str, data: dict) -> Plot | None:
-        existing = self.get(plot_id)
+    def update(self, plot_id: str, data: dict, owner_id: str) -> Plot | None:
+        existing = self.get(plot_id, owner_id)
         if existing is None:
             return None
-        # 仅更新允许字段
         fields = ("name", "crop", "variety", "lat", "lon", "location_name", "area_mu", "notes")
         merged = existing.to_dict()
         for f in fields:
@@ -77,7 +88,9 @@ class PlotRepository:
             )
         return Plot(**merged)
 
-    def delete(self, plot_id: str) -> bool:
+    def delete(self, plot_id: str, owner_id: str) -> bool:
         with self.db.connect() as conn:
-            cur = conn.execute("DELETE FROM plots WHERE id = ?", (plot_id,))
+            cur = conn.execute(
+                "DELETE FROM plots WHERE id = ? AND owner_id = ?", (plot_id, owner_id)
+            )
             return cur.rowcount > 0

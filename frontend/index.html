@@ -112,6 +112,17 @@
     .tab .ic { font-size: 26px; display: block; line-height: 1.1; }
     .tab.active { color: var(--green); font-weight: 700; }
 
+    /* 登录门 */
+    .auth-screen { position: fixed; inset: 0; z-index: 100; background: linear-gradient(160deg, var(--green), var(--green-d)); display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .auth-card { width: 100%; max-width: 420px; background: #fff; border-radius: 20px; padding: 28px 22px; }
+    .auth-logo { font-size: 30px; font-weight: 800; color: var(--green-d); text-align: center; }
+    .auth-sub { text-align: center; color: var(--ink-2); font-size: 16px; margin: 6px 0 18px; }
+    .auth-input { width: 100%; font-size: var(--fs-lg); padding: 14px; border: 2px solid var(--line); border-radius: 12px; margin-bottom: 12px; }
+    .auth-btn { width: 100%; min-height: 56px; background: var(--green); color: #fff; border: none; border-radius: 12px; font-size: var(--fs-lg); font-weight: 700; margin-top: 4px; cursor: pointer; }
+    .auth-toggle { text-align: center; color: var(--green); font-size: 16px; font-weight: 700; margin-top: 16px; cursor: pointer; }
+    .auth-err { color: var(--red); font-size: 16px; margin-bottom: 10px; }
+    .auth-tip { text-align: center; color: var(--ink-2); font-size: 14px; margin-top: 14px; line-height: 1.5; }
+
     /* toast */
     .toast { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); background: rgba(0,0,0,.82); color: #fff; padding: 14px 22px; border-radius: 12px; font-size: var(--fs-base); z-index: 50; }
 
@@ -206,6 +217,25 @@
 </head>
 <body>
   <div id="app">
+    <!-- 登录 / 注册门 -->
+    <div class="auth-screen" v-if="!authed">
+      <div class="auth-card">
+        <div class="auth-logo">🍑 AI 助农</div>
+        <div class="auth-sub">{{ authMode === 'login' ? '登录开始用' : '注册一个新账号' }}</div>
+        <input class="auth-input" v-model="authForm.username" placeholder="用户名" autocomplete="username" />
+        <input class="auth-input" v-model="authForm.password" type="password" placeholder="密码（至少4位）" autocomplete="current-password" @keyup.enter="submitAuth" />
+        <input class="auth-input" v-if="authMode === 'register'" v-model="authForm.display_name" placeholder="你的称呼（如：老张/张三的儿子）" />
+        <div class="auth-err" v-if="authErr">{{ authErr }}</div>
+        <button class="auth-btn" @click="submitAuth" :disabled="authBusy">
+          {{ authBusy ? '请稍候…' : (authMode === 'login' ? '登录' : '注册并进入') }}
+        </button>
+        <div class="auth-toggle" @click="authErr=''; authMode = (authMode === 'login' ? 'register' : 'login')">
+          {{ authMode === 'login' ? '没有账号？点这里注册' : '已有账号？去登录' }}
+        </div>
+        <div class="auth-tip">建议子女注册账号，帮父母管理；父母用同一账号在手机上看。</div>
+      </div>
+    </div>
+
     <!-- 顶部物候条 -->
     <div class="topbar">
       <div class="crop-row" v-if="crops.length > 1">
@@ -683,6 +713,11 @@
             <button class="pbtn" @click="closeMe(); openPlots()">🌳 我的园子</button>
           </div>
 
+          <!-- 账号 -->
+          <div class="me-sec">👤 账号</div>
+          <div class="pmeta" style="padding:0 2px 10px">当前登录：{{ me ? (me.display_name || me.username) : '—' }}</div>
+          <div class="plot-actions"><button class="pbtn danger" @click="logout">退出登录</button></div>
+
           <!-- 关于 -->
           <div class="me-sec">ℹ️ 关于</div>
           <div class="pmeta" style="padding:0 2px">
@@ -706,10 +741,27 @@
   </div>
 
   <script>
+    // 全局给 /api 请求自动带上登录 token（避免逐个改 fetch 调用点）
+    const _origFetch = window.fetch.bind(window);
+    window.fetch = (url, opts = {}) => {
+      const t = localStorage.getItem('token');
+      if (t && typeof url === 'string' && url.startsWith('/api/')) {
+        opts = Object.assign({}, opts);
+        opts.headers = Object.assign({}, opts.headers || {}, { Authorization: 'Bearer ' + t });
+      }
+      return _origFetch(url, opts);
+    };
+
     const { createApp } = Vue;
     createApp({
       data() {
         return {
+          authed: false,
+          authMode: 'login',
+          authForm: { username: '', password: '', display_name: '' },
+          authErr: '',
+          authBusy: false,
+          me: null,
           crops: [],
           crop: localStorage.getItem('crop') || '',
           plots: [],
@@ -752,11 +804,7 @@
       },
       async mounted() {
         this.dateText = this.fmtDate(new Date());
-        this.checkTts();
-        await this.loadCrops();
-        await this.loadPlots();   // 若有当前地块，用它的作物覆盖
-        this.applyActivePlot();
-        this.reloadCropData();
+        await this.checkAuth();
       },
       computed: {
         topAlert() { return this.alerts.length ? this.alerts[0] : null; },
@@ -765,6 +813,52 @@
       methods: {
         fmtDate(d) {
           return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+        },
+        // ---- 登录 / 注册 ----
+        async checkAuth() {
+          if (!localStorage.getItem('token')) { this.authed = false; return; }
+          try {
+            const r = await fetch('/api/auth/me');
+            if (!r.ok) throw new Error('401');
+            this.me = (await r.json()).user;
+            this.authed = true;
+            await this.initApp();
+          } catch (e) {
+            localStorage.removeItem('token');
+            this.authed = false;
+          }
+        },
+        async submitAuth() {
+          const f = this.authForm;
+          if (!f.username.trim() || !f.password) { this.authErr = '请填用户名和密码'; return; }
+          this.authBusy = true; this.authErr = '';
+          try {
+            const url = this.authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
+            const r = await fetch(url, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(f),
+            });
+            const d = await r.json();
+            if (!r.ok) { this.authErr = d.detail || '失败，请重试'; return; }
+            localStorage.setItem('token', d.token);
+            this.me = d.user;
+            this.authed = true;
+            this.authForm = { username: '', password: '', display_name: '' };
+            await this.initApp();
+          } catch (e) { this.authErr = '网络不太好，稍后再试'; }
+          finally { this.authBusy = false; }
+        },
+        async logout() {
+          try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+          localStorage.removeItem('token');
+          location.reload();
+        },
+        async initApp() {
+          this.checkTts();
+          await this.loadCrops();
+          await this.loadPlots();
+          this.applyActivePlot();
+          this.reloadCropData();
         },
         // ---- 作物 ----
         cropQS(prefix) {
