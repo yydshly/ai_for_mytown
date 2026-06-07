@@ -40,6 +40,8 @@ class AuthService:
             raise AuthError("该用户名已被占用")
         salt = secrets.token_bytes(16).hex()
         from datetime import datetime, timezone
+        # 第一个注册的用户成为管理员（你/农技员）
+        first_user = self.repo.count() == 0
         user = User(
             id=uuid.uuid4().hex[:12],
             username=username,
@@ -47,6 +49,7 @@ class AuthService:
             pwd_hash=_hash(password, salt),
             salt=salt,
             created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            is_admin=first_user,
         )
         self.repo.insert(user)
         return user, self._issue_token(user.id)

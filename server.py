@@ -28,6 +28,7 @@ from src.backend.routes import (  # noqa: E402
     contact_routes,
     crop_routes,
     diagnose_routes,
+    interaction_routes,
     ledger_routes,
     log_routes,
     notify_routes,
@@ -70,7 +71,17 @@ def create_app() -> tuple[FastAPI, "object"]:
     ai_routes.register(app, ctx)
     tts_routes.register(app, ctx)
     notify_routes.register(app, ctx)
+    interaction_routes.register(app, ctx)
     static_routes.register(app, ctx)
+
+    # 统一错误日志：未捕获异常记下接口+错误，便于排查可靠性问题
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+
+    @app.exception_handler(Exception)
+    async def _unhandled(request: Request, exc: Exception):
+        log.exception("未处理异常 %s %s: %s", request.method, request.url.path, exc)
+        return JSONResponse(status_code=500, content={"detail": "服务出错了，请稍后再试"})
 
     # 预警定时推送：随应用启停（F1）
     scheduler = AlertScheduler(ctx)

@@ -10,6 +10,7 @@ import logging
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from ..infra.auth_dep import make_current_user
+from ..repositories.interaction_repository import InteractionRepository
 from ..services.chat_service import ChatService
 
 log = logging.getLogger("routes.chat")
@@ -21,6 +22,7 @@ MAX_HISTORY = 8
 def register(app, ctx) -> None:
     r = APIRouter()
     svc = ChatService(ctx)
+    interactions = InteractionRepository(ctx.db)
     optional_user = make_current_user(ctx, required=False)
 
     @r.get("/api/chat/available")
@@ -45,6 +47,12 @@ def register(app, ctx) -> None:
         # 仅在登录且拥有该地块时，才注入地块上下文
         plot_id = (payload.get("plot_id") or "").strip() or None
         owner_id = user.id if user else None
-        return await svc.answer(kb, bundle, question, history, plot_id=plot_id, owner_id=owner_id)
+        result = await svc.answer(kb, bundle, question, history, plot_id=plot_id, owner_id=owner_id)
+        rec = interactions.log(
+            user_id=(owner_id or ""), kind="chat", crop=cid, plot_id=(plot_id or ""),
+            summary=question, result_summary=result.get("answer", ""),
+        )
+        result["interaction_id"] = rec.id
+        return result
 
     app.include_router(r)

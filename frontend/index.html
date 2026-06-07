@@ -189,6 +189,11 @@
     .chat-text-row input { flex: 1; font-size: 17px; padding: 12px 14px; border: 2px solid var(--line); border-radius: 12px; }
     .chat-text-row button { background: var(--green); color: #fff; border: none; border-radius: 12px; padding: 0 18px; font-size: 17px; font-weight: 700; }
     .typing { align-self: flex-start; color: var(--ink-2); font-size: 16px; padding: 6px 4px; }
+    /* 反馈按钮 */
+    .fb-row { margin: 10px 2px; font-size: 16px; color: var(--ink-2); }
+    .fb-inline { margin-left: 8px; }
+    .fb-btn { background: #fff; border: 2px solid var(--line); border-radius: 16px; padding: 5px 12px; font-size: 15px; margin-left: 6px; cursor: pointer; }
+    .fb-btn.on { background: var(--green); color: #fff; border-color: var(--green); }
 
     /* ===== 我的园子（地块管理） ===== */
     .plot-card { background:#fff; border:2px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
@@ -395,6 +400,11 @@
               <div class="cand-src">来源：{{ c.source }}（{{ c.trust_level }}，{{ c.review_status === 'verified' ? '已审核' : '待审核' }}）</div>
             </div>
 
+            <div class="fb-row" v-if="diag.result.interaction_id">
+              这条诊断：
+              <button class="fb-btn" :class="{on: diag.fb==='good'}" @click="sendFeedback(diag.result.interaction_id, 'good', 'diag')">👍 有用</button>
+              <button class="fb-btn" :class="{on: diag.fb==='bad'}" @click="sendFeedback(diag.result.interaction_id, 'bad', 'diag')">👎 不对</button>
+            </div>
             <div class="diag-actions">
               <div class="chip" v-if="diag.result.candidates.length" @click="logDiagnosis">✓ 记一笔</div>
               <div class="chip" @click="pickPhoto">📷 重拍</div>
@@ -453,8 +463,12 @@
           <template v-for="(m, i) in chat.msgs" :key="i">
             <div class="bubble" :class="m.role === 'user' ? 'me' : 'ai'">
               {{ m.content }}
-              <div v-if="m.role === 'assistant' && ttsAvailable">
-                <button class="speak" :class="{busy: speaking===m.content}" @click="speak(m.content)">🔊 听</button>
+              <div v-if="m.role === 'assistant'">
+                <button v-if="ttsAvailable" class="speak" :class="{busy: speaking===m.content}" @click="speak(m.content)">🔊 听</button>
+                <span v-if="m.iid" class="fb-inline">
+                  <button class="fb-btn" :class="{on: m.fb==='good'}" @click="sendFeedback(m.iid, 'good', m)">👍</button>
+                  <button class="fb-btn" :class="{on: m.fb==='bad'}" @click="sendFeedback(m.iid, 'bad', m)">👎</button>
+                </span>
               </div>
             </div>
           </template>
@@ -745,6 +759,23 @@
           <div class="pmeta" style="padding:0 2px 10px">当前登录：{{ me ? (me.display_name || me.username) : '—' }}</div>
           <div class="plot-actions"><button class="pbtn danger" @click="logout">退出登录</button></div>
 
+          <!-- 管理员：被标"不对"的回答 -->
+          <template v-if="me && me.is_admin">
+            <div class="me-sec">🛡️ 审核（管理员）</div>
+            <div class="pmeta" style="padding:0 2px 8px" v-if="adminStats">
+              共 {{ adminStats.total }} 次 · 👍{{ adminStats.good }} · 👎{{ adminStats.bad }}
+            </div>
+            <div v-if="!adminFlagged.length" class="pmeta" style="padding:0 2px">暂无被标"不对"的回答。</div>
+            <div v-for="it in adminFlagged" :key="it.id" class="plot-card">
+              <div class="pname" style="font-size:var(--fs-base)">
+                <span class="plot-tag" style="background:var(--red)">👎{{ it.kind === 'chat' ? '问答' : '诊断' }}</span>
+                {{ it.created_at.slice(0,10) }}
+              </div>
+              <div class="pmeta">问：{{ it.summary }}</div>
+              <div class="pmeta">答：{{ it.result_summary }}</div>
+            </div>
+          </template>
+
           <!-- 关于 -->
           <div class="me-sec">ℹ️ 关于</div>
           <div class="pmeta" style="padding:0 2px">
@@ -812,6 +843,8 @@
           contactForm: null,
           contactRoles: ['农技员','子女','邻居','合作社','其他'],
           meInfo: {},
+          adminFlagged: [],
+          adminStats: null,
           region: '陕西关中',
           dateText: '',
           stage: null,
@@ -1151,6 +1184,19 @@
           } catch (e) { this.toast('农事日历加载失败'); }
         },
         closeCalendarAll() { this.calAll = null; },
+        // ---- AI 反馈（Phase 19） ----
+        async sendFeedback(iid, value, target) {
+          if (!iid) return;
+          try {
+            await fetch(`/api/interactions/${iid}/feedback`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ value }),
+            });
+            if (target === 'diag') this.diag.fb = value;
+            else if (target && typeof target === 'object') target.fb = value;
+            this.toast(value === 'good' ? '谢谢反馈👍' : '已记下，会改进');
+          } catch (e) { this.toast('反馈没发出去'); }
+        },
         // ---- 病虫害图鉴（E3） ----
         async openLibrary() {
           this.library = { cropName: this.cropName(this.crop), items: [], open: -1 };
@@ -1171,6 +1217,17 @@
           this.contactForm = null;
           this.loadContacts();
           this.loadMeInfo();
+          if (this.me && this.me.is_admin) this.loadAdmin();
+        },
+        async loadAdmin() {
+          try {
+            const [f, s] = await Promise.all([
+              fetch('/api/admin/interactions?flagged=1&limit=50').then(r => r.json()),
+              fetch('/api/admin/stats').then(r => r.json()),
+            ]);
+            this.adminFlagged = f.interactions || [];
+            this.adminStats = s;
+          } catch (e) {}
         },
         closeMe() { this.meView = false; this.contactForm = null; },
         async loadContacts() {
@@ -1318,7 +1375,7 @@
             });
             if (!r.ok) throw new Error('chat ' + r.status);
             const d = await r.json();
-            this.chat.msgs.push({ role: 'assistant', content: d.answer });
+            this.chat.msgs.push({ role: 'assistant', content: d.answer, iid: d.interaction_id, fb: '' });
             this.scrollChat();
             if (this.ttsAvailable) this.speak(d.answer);   // 自动朗读回答
           } catch (e) {
@@ -1335,7 +1392,7 @@
           const f = e.target.files && e.target.files[0];
           e.target.value = '';          // 允许再次选同一文件
           if (!f) return;
-          this.diag = { open: true, loading: true, result: null };
+          this.diag = { open: true, loading: true, result: null, fb: '' };
           try {
             const fd = new FormData();
             fd.append('file', f);

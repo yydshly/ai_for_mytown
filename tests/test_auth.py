@@ -49,3 +49,13 @@ def test_logout_invalidates_token(temp_db):
 
 def test_unknown_token_is_none(temp_db):
     assert _svc(temp_db).user_by_token("nope") is None
+
+
+def test_first_user_is_admin(temp_db):
+    svc = _svc(temp_db)
+    u1, _ = svc.register("boss", "pass1234")
+    u2, _ = svc.register("worker", "pass1234")
+    assert u1.is_admin is True       # 第一个注册者是管理员
+    assert u2.is_admin is False
+    assert u1.to_public()["is_admin"] is True
+

@@ -85,6 +85,7 @@ _MIGRATIONS: list[str] = [
         display_name TEXT DEFAULT '',
         pwd_hash     TEXT NOT NULL,
         salt         TEXT NOT NULL,
+        is_admin     INTEGER DEFAULT 0,
         created_at   TEXT NOT NULL
     )
     """,
@@ -95,6 +96,20 @@ _MIGRATIONS: list[str] = [
         created_at TEXT NOT NULL
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS ai_interactions (
+        id             TEXT PRIMARY KEY,
+        user_id        TEXT DEFAULT '',
+        kind           TEXT NOT NULL,            -- diagnose | chat
+        crop           TEXT DEFAULT '',
+        plot_id        TEXT DEFAULT '',
+        summary        TEXT DEFAULT '',          -- 用户问题/补充（截断）
+        result_summary TEXT DEFAULT '',          -- AI 回答（截断）
+        feedback       TEXT DEFAULT '',          -- '' | good | bad
+        created_at     TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_ai_fb ON ai_interactions(feedback, created_at)",
 ]
 
 
@@ -121,9 +136,13 @@ class Database:
         with self.connect() as conn:
             for stmt in _MIGRATIONS:
                 conn.executescript(stmt)
-            # 向后兼容：已存在的旧库补 owner_id 列（新库 CREATE 已含，ALTER 会报重复→忽略）
+            # 向后兼容：已存在的旧库补列（新库 CREATE 已含，ALTER 重复→忽略）
             for table in ("plots", "contacts"):
                 try:
                     conn.execute(f"ALTER TABLE {table} ADD COLUMN owner_id TEXT DEFAULT ''")
                 except Exception:
                     pass
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+            except Exception:
+                pass

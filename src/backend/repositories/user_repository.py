@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from ..domain.user import User
 from ..infra.db import Database
 
-_COLUMNS = "id, username, display_name, pwd_hash, salt, created_at"
+_COLUMNS = "id, username, display_name, pwd_hash, salt, is_admin, created_at"
 
 
 def _now() -> str:
@@ -34,12 +34,18 @@ class UserRepository:
         return User.from_row(row) if row else None
 
     def insert(self, user: User) -> None:
+        row = dict(user.__dict__)
+        row["is_admin"] = 1 if user.is_admin else 0
         with self.db.connect() as conn:
             conn.execute(
                 f"INSERT INTO users ({_COLUMNS}) VALUES "
-                "(:id,:username,:display_name,:pwd_hash,:salt,:created_at)",
-                user.__dict__,
+                "(:id,:username,:display_name,:pwd_hash,:salt,:is_admin,:created_at)",
+                row,
             )
+
+    def count(self) -> int:
+        with self.db.connect() as conn:
+            return conn.execute("SELECT COUNT(*) c FROM users").fetchone()["c"]
 
     # ---- sessions ----
 

@@ -79,6 +79,14 @@ Phase 3c（语音问答）✅
 > ⚠️ 手机上**语音输入(ASR)和"添加到主屏幕"需要 HTTPS**，纯局域网 http 不行。
 > 用带 https 的内网穿透（cpolar 等）一并解决可达性与安全环境。
 
+Phase 19（AI 审计 + 反馈 + 管理员后台 · 安全与可靠性）✅
+- **安全模型**：不实时人审每条；控知识源头 + 运行护栏(已做) + **此处事后审计与反馈**
+- `ai_interactions` 审计表（截断摘要，不存图片）：诊断/问答各记一条，返回 interaction_id
+- **用户反馈**：诊断结果 + 问答气泡上 👍有用/👎不对 → 回流
+- **管理员后台**：第一个注册者为 admin；GET /api/admin/interactions（看被标"不对"的）+ /api/admin/stats；非 admin 403
+- **可靠性**：统一未捕获异常日志（接口+错误），友好 500
+- 验证：审计/反馈/admin 门禁全通；38 测试
+
 Phase 16-17（多用户 + 数据隔离 · 产品化地基）✅
 - **身份层**：users/sessions 表，pbkdf2 加盐哈希 + token 会话；register/login/me/logout；身份与业务解耦（日后可插微信登录）
 - **数据隔离**：plots/contacts 加 owner_id，仓储全部按 owner 过滤；日志/账本通过地块归属继承；删除走 owner 校验子查询

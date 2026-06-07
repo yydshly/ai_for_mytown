@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 
 from ..infra.auth_dep import make_current_user
 from ..repositories.activity_log_repository import ActivityLogRepository
+from ..repositories.interaction_repository import InteractionRepository
 from ..repositories.plot_repository import PlotRepository
 from ..services.diagnose import diagnose
 
@@ -33,6 +34,7 @@ def register(app, ctx) -> None:
     keep_days = ((ctx.config.get("diagnose") or {}).get("keep_uploaded_images_days")) or 0
     plots = PlotRepository(ctx.db)
     logs = ActivityLogRepository(ctx.db)
+    interactions = InteractionRepository(ctx.db)
     optional_user = make_current_user(ctx, required=False)
 
     @r.post("/api/diagnose")
@@ -74,6 +76,14 @@ def register(app, ctx) -> None:
                     "last_spray_title": last.title,
                     "days_ago": _days_ago(last.date),
                 }
+
+        # 审计：记一条 AI 交互（仅截断摘要，不存图片）
+        rec = interactions.log(
+            user_id=(user.id if user else ""), kind="diagnose", crop=cid,
+            plot_id=(plot_id or ""), summary=(note.strip() or "拍照诊断"),
+            result_summary=result.get("identification_raw") or result.get("confidence_note", ""),
+        )
+        result["interaction_id"] = rec.id
 
         # 隐私：默认不留存图片（keep_days=0 时 data 随函数结束被回收，不写盘）
         if keep_days and keep_days > 0:
