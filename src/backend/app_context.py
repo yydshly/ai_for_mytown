@@ -11,8 +11,10 @@ from typing import Any
 from .domain.crops import CropRegistry
 from .infra.db import Database
 from .infra.safeio import read_json
+from .repositories.corpus_repository import CorpusRepository
 from .repositories.user_repository import UserRepository
 from .services.auth_service import AuthService
+from .services.doc_ingest import auto_ingest_if_empty
 from .services.knowledge_manager import KnowledgeManager
 
 
@@ -44,6 +46,11 @@ class AppContext:
         self.db = Database(self.data_dir / "app.db")
         self.db.init_schema()
         self.auth = AuthService(UserRepository(self.db))
+        # 资料灌入：首次启动若语料为空，自动灌入种子文档（开箱即用）
+        try:
+            auto_ingest_if_empty(CorpusRepository(self.db), self.data_dir / "corpus")
+        except Exception:
+            pass
 
 
 def build_context(project_root: Path) -> AppContext:

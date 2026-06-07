@@ -17,6 +17,7 @@ from ...ai.tasks import chat_with_context
 from ..domain.crops import CropKnowledge
 from ..infra.safeio import read_json
 from ..repositories.activity_log_repository import ActivityLogRepository
+from ..repositories.corpus_repository import CorpusRepository
 from ..repositories.plot_repository import PlotRepository
 from .knowledge_base import KnowledgeBase
 from .phenology import current_stage, load_stages
@@ -51,8 +52,8 @@ class ChatService:
     def available(self) -> bool:
         return self._get_provider() is not None
 
-    def _context(self, kb: KnowledgeBase, bundle: CropKnowledge, question: str) -> tuple[str, list[str]]:
-        """组装 RAG 上下文：当前物候期名 + 相关病虫条目 + 本周农事（按作物）。"""
+    def _context(self, kb: KnowledgeBase, bundle: CropKnowledge, crop: str, question: str) -> tuple[str, list[str]]:
+        """组装 RAG 上下文：物候期 + 病虫条目 + 本周农事 + 灌入的文档资料（按作物）。"""
         snippets: list[str] = []
 
         # 当前物候期 + 本周农事
@@ -71,6 +72,11 @@ class ChatService:
             snippets.append(
                 f"【{m.name}】症状：{m.symptoms} 防治：{m.cultural_control}"
             )
+
+        # 灌入的文档资料检索（RAG：让回答有据可依，标注出处）
+        for c in CorpusRepository(self.ctx.db).retrieve(question, crop, k=2):
+            snippets.append(f"【资料·{c['source']}】{c['text']}")
+
         return stage_name, snippets
 
     def _plot_snippet(self, plot_id: str, owner_id: str | None) -> str:
@@ -100,7 +106,7 @@ class ChatService:
         if provider is None:
             return {"mode": "unconfigured", "answer": "AI 暂未配置，问题我先记下了，建议咨询农技员。"}
 
-        stage_name, snippets = self._context(kb, bundle, question)
+        stage_name, snippets = self._context(kb, bundle, bundle.crop_id, question)
         # 当前地块的最近农事，让回答更贴这块地
         if plot_id:
             ps = self._plot_snippet(plot_id, owner_id)

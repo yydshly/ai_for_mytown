@@ -110,6 +110,16 @@ _MIGRATIONS: list[str] = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_ai_fb ON ai_interactions(feedback, created_at)",
+    """
+    CREATE TABLE IF NOT EXISTS corpus_chunks (
+        id         TEXT PRIMARY KEY,
+        crop       TEXT DEFAULT '',
+        source     TEXT DEFAULT '',
+        text       TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_corpus_crop ON corpus_chunks(crop)",
 ]
 
 
