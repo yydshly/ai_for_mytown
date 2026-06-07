@@ -120,6 +120,17 @@ _MIGRATIONS: list[str] = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_corpus_crop ON corpus_chunks(crop)",
+    """
+    CREATE TABLE IF NOT EXISTS pest_images (
+        id         TEXT PRIMARY KEY,
+        crop       TEXT DEFAULT '',
+        pest_id    TEXT NOT NULL,
+        filename   TEXT NOT NULL,
+        caption    TEXT DEFAULT '',
+        created_at TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_pestimg ON pest_images(crop, pest_id)",
 ]
 
 

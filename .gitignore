@@ -16,3 +16,4 @@ data/*.db
 .idea/
 .vscode/
 *.bak
+data/images/

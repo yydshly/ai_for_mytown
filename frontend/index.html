@@ -126,6 +126,13 @@
     .ob-crop span { display: block; font-size: 14px; color: var(--ink-2); font-weight: 400; margin-top: 2px; }
     .ob-crop.on { border-color: var(--green); background: #e8f5e9; }
 
+    /* 参考图 / 诊断照片 / 放大 */
+    .img-strip { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 10px; }
+    .ref-img { width: 96px; height: 96px; object-fit: cover; border-radius: 10px; border: 2px solid var(--line); cursor: pointer; }
+    .diag-photo { width: 100%; max-height: 220px; object-fit: contain; border-radius: 12px; background: #000; margin-bottom: 10px; cursor: pointer; }
+    .lightbox { position: fixed; inset: 0; z-index: 110; background: rgba(0,0,0,.9); display: flex; align-items: center; justify-content: center; padding: 12px; }
+    .lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+
     /* toast */
     .toast { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); background: rgba(0,0,0,.82); color: #fff; padding: 14px 22px; border-radius: 12px; font-size: var(--fs-base); z-index: 50; }
 
@@ -365,6 +372,7 @@
 
           <!-- 有结果 -->
           <template v-else-if="diag.result">
+            <img v-if="diag.photo" :src="diag.photo" class="diag-photo" @click="lightbox = diag.photo" />
             <div class="diag-raw">{{ diag.result.identification_raw }}</div>
             <button v-if="ttsAvailable" class="speak lg" :class="{busy: speaking===diagSpeakText()}"
                     @click="speak(diagSpeakText())">🔊 听一遍诊断结果</button>
@@ -691,6 +699,13 @@
               <span style="float:right;font-size:18px">{{ library.open === i ? '▲' : '▼' }}</span>
             </div>
             <template v-if="library.open === i">
+              <div class="img-strip" v-if="it.images && it.images.length">
+                <img v-for="im in it.images" :key="im.id" :src="im.url" class="ref-img" @click="lightbox = im.url" />
+              </div>
+              <div v-else class="cand-row" style="color:var(--ink-2)">（暂无参考图）</div>
+              <div v-if="me && me.is_admin" style="margin:6px 0 10px">
+                <button class="pbtn" @click="uploadPestImage(it)">＋ 上传参考图</button>
+              </div>
               <div class="cand-row"><b>症状：</b>{{ it.symptoms }}</div>
               <div class="cand-row"><b>怎么认：</b>{{ it.identify_cues }}</div>
               <div class="cand-row" v-if="it.confusable_with"><b>易混淆：</b>{{ it.confusable_with }}</div>
@@ -787,6 +802,12 @@
       </div>
     </div>
 
+    <!-- 图片放大 -->
+    <div class="lightbox" v-if="lightbox" @click="lightbox=''">
+      <img :src="lightbox" />
+    </div>
+    <input ref="pestImg" type="file" accept="image/*" style="display:none" @change="onPestImg" />
+
     <!-- 底部导航 -->
     <div class="tabbar">
       <div class="tab active"><span class="ic">🏠</span>首页</div>
@@ -838,6 +859,8 @@
           plotSummary: null,
           library: null,
           calAll: null,
+          lightbox: '',
+          _pestTarget: null,
           meView: false,
           contacts: [],
           contactForm: null,
@@ -1208,6 +1231,24 @@
           } catch (e) { this.toast('图鉴加载失败，稍后再试'); }
         },
         closeLibrary() { this.library = null; this.stopSpeak(); },
+        uploadPestImage(it) { this._pestTarget = it; this.$refs.pestImg.click(); },
+        async onPestImg(e) {
+          const f = e.target.files && e.target.files[0];
+          e.target.value = '';
+          if (!f || !this._pestTarget) return;
+          const it = this._pestTarget;
+          try {
+            const fd = new FormData();
+            fd.append('file', f);
+            fd.append('crop', this.crop);
+            const r = await fetch(`/api/pests/${it.id}/images`, { method: 'POST', body: fd });
+            if (!r.ok) throw new Error('upload ' + r.status);
+            const im = await r.json();
+            if (!it.images) it.images = [];
+            it.images.push({ id: im.id, url: im.url, caption: im.caption });
+            this.toast('参考图已上传');
+          } catch (err) { this.toast('上传失败，稍后再试'); }
+        },
         libSpeakText(it) {
           return `${it.name}。症状：${it.symptoms}。怎么认：${it.identify_cues}。防治：${it.cultural_control}`;
         },
@@ -1392,7 +1433,7 @@
           const f = e.target.files && e.target.files[0];
           e.target.value = '';          // 允许再次选同一文件
           if (!f) return;
-          this.diag = { open: true, loading: true, result: null, fb: '' };
+          this.diag = { open: true, loading: true, result: null, fb: '', photo: URL.createObjectURL(f) };
           try {
             const fd = new FormData();
             fd.append('file', f);

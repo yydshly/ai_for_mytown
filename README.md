@@ -79,6 +79,13 @@ Phase 3c（语音问答）✅
 > ⚠️ 手机上**语音输入(ASR)和"添加到主屏幕"需要 HTTPS**，纯局域网 http 不行。
 > 用带 https 的内网穿透（cpolar 等）一并解决可达性与安全环境。
 
+Phase 21（图片支持）✅
+- **病虫害图鉴配参考图**：管理员上传 → 图鉴每条展示参考图(点击放大)，果农比对自家病
+- `pest_images` 表 + ImageRepository；图片存盘 data/images/(gitignore)，DB 存元数据
+- `POST /api/pests/{id}/images`(管理员) / `GET /api/images/{name}`(开放,净化防穿越) / `DELETE`(管理员)
+- 拍照诊断结果**回显你拍的照片**；图鉴/诊断图均可点击全屏放大(lightbox)
+- 真实病害照片由你/农技员上传(基础设施已就绪)；验证：上传→图鉴带图→浏览200→非管理员403
+
 Phase 20（资料灌入 · 完整版 RAG · 提升准确率）✅
 - **文档灌入管线**：把 `data/corpus/<crop>/` 下的 .md/.txt 切段灌入 `corpus_chunks`；
   `scripts/ingest_docs.py` 一条命令重灌（幂等）；启动时语料为空自动灌种子（开箱即用）
