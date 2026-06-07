@@ -17,3 +17,6 @@ data/*.db
 .vscode/
 *.bak
 data/images/
+
+# 部署密钥
+.env

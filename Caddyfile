@@ -1,0 +1,14 @@
+# Caddy 反向代理 + 自动 HTTPS（一行配置自动申请 Let's Encrypt 证书）
+# 用法：把 your.domain.com 换成你的真实域名，确保域名已解析到本服务器公网 IP。
+#   caddy run --config ./Caddyfile
+# HTTPS 一旦生效，手机上的"语音输入(ASR)"和"添加到主屏幕(PWA)"才可用。
+
+your.domain.com {
+    encode gzip
+    reverse_proxy 127.0.0.1:8770
+}
+
+# 仅自测、无域名时（http，语音/PWA 不可用）：
+# :80 {
+#     reverse_proxy 127.0.0.1:8770
+# }
