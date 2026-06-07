@@ -122,6 +122,9 @@
     .auth-toggle { text-align: center; color: var(--green); font-size: 16px; font-weight: 700; margin-top: 16px; cursor: pointer; }
     .auth-err { color: var(--red); font-size: 16px; margin-bottom: 10px; }
     .auth-tip { text-align: center; color: var(--ink-2); font-size: 14px; margin-top: 14px; line-height: 1.5; }
+    .ob-crop { width: 100%; min-height: 64px; border: 2px solid var(--line); background: #fff; border-radius: 14px; font-size: var(--fs-xl); font-weight: 700; color: var(--ink); margin-bottom: 12px; cursor: pointer; }
+    .ob-crop span { display: block; font-size: 14px; color: var(--ink-2); font-weight: 400; margin-top: 2px; }
+    .ob-crop.on { border-color: var(--green); background: #e8f5e9; }
 
     /* toast */
     .toast { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); background: rgba(0,0,0,.82); color: #fff; padding: 14px 22px; border-radius: 12px; font-size: var(--fs-base); z-index: 50; }
@@ -233,6 +236,30 @@
           {{ authMode === 'login' ? '没有账号？点这里注册' : '已有账号？去登录' }}
         </div>
         <div class="auth-tip">建议子女注册账号，帮父母管理；父母用同一账号在手机上看。</div>
+      </div>
+    </div>
+
+    <!-- 新用户引导 -->
+    <div class="auth-screen" v-if="authed && onboarding" style="background:linear-gradient(160deg,#5aa05a,var(--green-d))">
+      <div class="auth-card">
+        <template v-if="obStep === 1">
+          <div class="auth-logo">👋 欢迎</div>
+          <div class="auth-sub">先告诉我，你家种的是什么？</div>
+          <button v-for="c in crops" :key="c.id" class="ob-crop" :class="{on: obForm.crop === c.id}"
+                  @click="obForm.crop = c.id">{{ c.name }}<span>{{ c.region }}</span></button>
+          <button class="auth-btn" @click="obStep = 2" :disabled="!obForm.crop">下一步</button>
+          <div class="auth-toggle" @click="obSkip">先跳过，自己逛逛</div>
+        </template>
+        <template v-else>
+          <div class="auth-logo">🌳 建第一块地</div>
+          <div class="auth-sub">起个名字，以后农事、账本都按这块地来</div>
+          <input class="auth-input" v-model="obForm.name" placeholder="地块名，如：东塬{{ cropName(obForm.crop) }}园" />
+          <input class="auth-input" v-model="obForm.location_name" placeholder="所在村镇（可空，用于天气）" />
+          <input class="auth-input" v-model="obForm.area_mu" type="number" placeholder="面积/亩（可空）" />
+          <div class="auth-err" v-if="obErr">{{ obErr }}</div>
+          <button class="auth-btn" @click="obFinish" :disabled="obBusy">{{ obBusy ? '请稍候…' : '建好，开始用' }}</button>
+          <div class="auth-toggle" @click="obStep = 1">‹ 上一步</div>
+        </template>
       </div>
     </div>
 
@@ -762,6 +789,11 @@
           authErr: '',
           authBusy: false,
           me: null,
+          onboarding: false,
+          obStep: 1,
+          obForm: { crop: '', name: '', location_name: '', area_mu: '' },
+          obErr: '',
+          obBusy: false,
           crops: [],
           crop: localStorage.getItem('crop') || '',
           plots: [],
@@ -859,6 +891,37 @@
           await this.loadPlots();
           this.applyActivePlot();
           this.reloadCropData();
+          // 新用户（还没有地块）→ 引导建第一块地
+          if (!this.plots.length) {
+            this.obForm.crop = this.crop || (this.crops[0] && this.crops[0].id) || '';
+            this.obStep = 1;
+            this.onboarding = true;
+          }
+        },
+        obSkip() { this.onboarding = false; },
+        async obFinish() {
+          const f = this.obForm;
+          if (!f.name.trim()) { this.obErr = '给地块起个名吧'; return; }
+          this.obBusy = true; this.obErr = '';
+          try {
+            const body = {
+              name: f.name.trim(), crop: f.crop,
+              location_name: f.location_name || '',
+              area_mu: f.area_mu === '' ? null : Number(f.area_mu),
+            };
+            const r = await fetch('/api/plots', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            if (!r.ok) throw new Error('create ' + r.status);
+            const plot = await r.json();
+            await this.loadPlots();
+            this.setActive(plot);        // 设为当前 → 首页按这块地走
+            this.onboarding = false;
+            this.obForm = { crop: '', name: '', location_name: '', area_mu: '' };
+            this.toast('园子建好了，开始用吧');
+          } catch (e) { this.obErr = '建地块失败，稍后再试'; }
+          finally { this.obBusy = false; }
         },
         // ---- 作物 ----
         cropQS(prefix) {
